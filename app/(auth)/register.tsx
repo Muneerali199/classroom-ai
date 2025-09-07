@@ -23,7 +23,9 @@ export default function RegisterScreen() {
   const [role, setRole] = useState<'student' | 'teacher' | 'admin'>('student');
   const [loading, setLoading] = useState(false);
 
+  let signupTimeout: any = null;
   const handleRegister = async () => {
+    if (loading) return; // Prevent double tap
     if (!email || !password || !fullName) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
@@ -35,16 +37,23 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
-    const { error } = await signUp(email, password, fullName, role);
-
-    if (error) {
-      Alert.alert('Registration Failed', error.message);
-    } else {
-      Alert.alert('Success', 'Account created successfully! Please sign in.', [
-        { text: 'OK', onPress: () => router.replace('/(auth)/login') }
-      ]);
+    try {
+      const { error } = await signUp(email, password, fullName, role);
+      if (error) {
+        if (error.status === 429 || error.message?.toLowerCase().includes('too many requests')) {
+          Alert.alert('Too Many Requests', 'You have made too many signup attempts. Please wait a minute and try again.');
+        } else {
+          Alert.alert('Registration Failed', error.message);
+        }
+      } else {
+        Alert.alert('Success', 'Account created successfully! Please sign in.', [
+          { text: 'OK', onPress: () => router.replace('/(auth)/login') }
+        ]);
+      }
+    } finally {
+      // Prevent rapid re-submission for 2 seconds
+      signupTimeout = setTimeout(() => setLoading(false), 2000);
     }
-    setLoading(false);
   };
 
   return (
