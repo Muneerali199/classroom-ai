@@ -1,121 +1,361 @@
-
-import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  ScrollView,
+  useWindowDimensions,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Shield, Users, Zap, BookOpen, ChevronRight, ChevronLeft } from 'lucide-react-native';
+import { useAuth } from '@/contexts/AuthContext';
+import { router } from 'expo-router';
 
-const { width, height } = Dimensions.get('window');
+interface OnboardingSlide {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  icon: React.ComponentType<any>;
+  gradient: [string, string];
+  backgroundColor: [string, string, string];
+}
 
-const OnboardingScreen = () => {
-  const router = useRouter();
+const slides: OnboardingSlide[] = [
+  {
+    id: '1',
+    title: 'Secure Access',
+    subtitle: 'Institution-Controlled Platform',
+    description: 'Dean-supervised access ensures complete data privacy and institutional oversight of all educational activities.',
+    icon: Shield,
+    gradient: ['#667eea', '#764ba2'],
+    backgroundColor: ['#f093fb', '#f5576c', '#4facfe'],
+  },
+  {
+    id: '2',
+    title: 'Lightning Fast',
+    subtitle: 'Real-time Attendance',
+    description: 'Mark attendance in seconds with real-time synchronization across all devices and platforms.',
+    icon: Zap,
+    gradient: ['#f093fb', '#f5576c'],
+    backgroundColor: ['#4facfe', '#00f2fe', '#43e97b'],
+  },
+  {
+    id: '3',
+    title: 'For Everyone',
+    subtitle: 'Students, Teachers & Deans',
+    description: 'Intuitive platform designed for all educational roles with personalized dashboards and features.',
+    icon: Users,
+    gradient: ['#4facfe', '#00f2fe'],
+    backgroundColor: ['#43e97b', '#38f9d7', '#667eea'],
+  },
+  {
+    id: '4',
+    title: 'Smart Learning',
+    subtitle: 'Educational Excellence',
+    description: 'Advanced analytics and insights to improve educational outcomes and institutional performance.',
+    icon: BookOpen,
+    gradient: ['#43e97b', '#38f9d7'],
+    backgroundColor: ['#667eea', '#764ba2', '#f093fb'],
+  },
+];
+
+export default function OnboardingScreen() {
+  const { user, completeOnboarding } = useAuth();
+  const { width } = useWindowDimensions();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  const handleCompleteOnboarding = () => {
+    completeOnboarding();
+    
+    if (user) {
+      router.replace('/(tabs)');
+    } else {
+      // Navigate to the index screen within the (auth) group
+      router.replace('/auth');
+    }
+  };
+
+  const handleNext = () => {
+    if (currentIndex < slides.length - 1) {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      scrollViewRef.current?.scrollTo({
+        x: nextIndex * width,
+        animated: true,
+      });
+      animateSlide();
+    } else {
+      handleCompleteOnboarding();
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      const prevIndex = currentIndex - 1;
+      setCurrentIndex(prevIndex);
+      scrollViewRef.current?.scrollTo({
+        x: prevIndex * width,
+        animated: true,
+      });
+      animateSlide();
+    }
+  };
+
+  const animateSlide = () => {
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0.7,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.sequence([
+      Animated.timing(slideAnim, {
+        toValue: 20,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleScroll = (event: any) => {
+    const scrollPosition = event.nativeEvent.contentOffset.x;
+    const index = Math.round(scrollPosition / width);
+    setCurrentIndex(index);
+  };
+
+  const currentSlide = slides[currentIndex];
 
   return (
-    <LinearGradient
-      colors={["#2563EB", "#1CB5E0"]}
-      style={styles.gradient}
-    >
-      <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
-      <View style={styles.content}>
-        <Image
-          source={require('../assets/images/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={styles.title}>Welcome to{"\n"}<Text style={styles.brand}>Classroom AI</Text></Text>
-        <Text style={styles.subtitle}>
-          Your smart companion for managing courses, attendance, analytics, and more. Let AI help you make learning seamless!
-        </Text>
-        <TouchableOpacity style={styles.button} onPress={() => router.replace('/(auth)/login')} activeOpacity={0.85}>
-          <Text style={styles.buttonText}>Get Started</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={styles.container}>
+      <LinearGradient
+        colors={currentSlide.backgroundColor}
+        style={StyleSheet.absoluteFillObject}
+      />
+      
+      <TouchableOpacity
+        style={styles.skipButton}
+        onPress={handleCompleteOnboarding}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.skipText}>Skip</Text>
+      </TouchableOpacity>
+
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScroll}
+        scrollEventThrottle={16}
+      >
+        {slides.map((slide, index) => (
+          <View key={slide.id} style={[styles.slide, { width }]}>
+            <Animated.View
+              style={[
+                styles.iconContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={slide.gradient}
+                style={styles.iconGradient}
+              >
+                <slide.icon color="white" size={60} />
+              </LinearGradient>
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.textContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
+            >
+              <Text style={styles.title}>{slide.title}</Text>
+              <Text style={styles.subtitle}>{slide.subtitle}</Text>
+              <Text style={styles.description}>{slide.description}</Text>
+            </Animated.View>
+          </View>
+        ))}
+      </ScrollView>
+
+      <View style={styles.bottomContainer}>
+        <View style={styles.pagination}>
+          {slides.map((slide, index) => (
+            <View
+              key={slide.id}
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: index === currentIndex ? 'white' : 'rgba(255,255,255,0.4)',
+                  width: index === currentIndex ? 24 : 8,
+                },
+              ]}
+            />
+          ))}
+        </View>
+
+        <View style={styles.navigationContainer}>
+          {currentIndex > 0 && (
+            <TouchableOpacity
+              style={styles.navButton}
+              onPress={handlePrevious}
+              activeOpacity={0.8}
+            >
+              <ChevronLeft color="white" size={24} />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.nextButton, { marginLeft: currentIndex === 0 ? 'auto' : 0 }]}
+            onPress={handleNext}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
+              style={styles.nextButtonGradient}
+            >
+              <Text style={styles.nextButtonText}>
+                {currentIndex === slides.length - 1 ? 'Get Started' : 'Next'}
+              </Text>
+              <ChevronRight color="white" size={20} />
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={styles.illustrationContainer}>
-        <Image
-          source={{ uri: 'https://cdn.pixabay.com/photo/2017/01/31/13/14/online-2025987_1280.png' }}
-          style={styles.illustration}
-          resizeMode="contain"
-        />
-      </View>
-    </LinearGradient>
+    </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  gradient: {
+  container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  content: {
-    flex: 2,
+  skipButton: {
+    position: 'absolute',
+    top: 60,
+    right: 24,
+    zIndex: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  skipText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  slide: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    paddingHorizontal: 24,
-    marginTop: 40,
+    paddingHorizontal: 40,
   },
-  logo: {
-    width: width * 0.28,
-    height: width * 0.28,
-    marginBottom: 18,
-    borderRadius: 24,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 8,
+  iconContainer: {
+    marginBottom: 60,
+  },
+  iconGradient: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 10,
+  },
+  textContainer: {
+    alignItems: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 10,
+    color: 'white',
     textAlign: 'center',
-    lineHeight: 38,
-  },
-  brand: {
-    color: '#FFD700',
-    fontWeight: 'bold',
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 18,
-    color: '#e0e7ef',
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
-    marginBottom: 36,
-    paddingHorizontal: 10,
-    lineHeight: 26,
+    marginBottom: 20,
+    fontWeight: '600',
   },
-  button: {
-    backgroundColor: '#FFD700',
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 30,
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    elevation: 5,
-    marginTop: 8,
+  description: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    lineHeight: 24,
+    paddingHorizontal: 20,
   },
-  buttonText: {
-    color: '#2563EB',
-    fontSize: 20,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+  bottomContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
   },
-  illustrationContainer: {
-    flex: 1,
-    width: '100%',
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginBottom: 18,
+    marginBottom: 40,
   },
-  illustration: {
-    width: width * 0.8,
-    height: height * 0.25,
-    borderRadius: 18,
+  dot: {
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
+  },
+  navigationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  navButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextButton: {
+    borderRadius: 25,
+    overflow: 'hidden',
+  },
+  nextButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  nextButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 8,
   },
 });
-
-export default OnboardingScreen;

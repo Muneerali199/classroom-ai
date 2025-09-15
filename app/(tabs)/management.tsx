@@ -1,362 +1,422 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Animated,
   TextInput,
-  Alert,
-  Modal,
 } from 'react-native';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Users, BookOpen, Plus, Search, CreditCard as Edit, Trash2, Crown, User, GraduationCap } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { 
+  Users, 
+  UserPlus, 
+  Settings, 
+  BookOpen, 
+  Shield,
+  Search,
+  Filter,
+  MoreVertical,
+  Edit,
+  Trash2,
+  GraduationCap
+} from 'lucide-react-native';
 
 interface User {
   id: string;
+  name: string;
   email: string;
-  full_name: string | null;
-  role: 'student' | 'teacher' | 'admin';
-  created_at: string;
+  role: 'student' | 'teacher' | 'dean';
+  department: string;
+  status: 'active' | 'inactive';
+  joinDate: string;
 }
 
 interface Course {
   id: string;
-  title: string;
-  description: string | null;
-  teacher_id: string;
-  teacher_name?: string;
-  student_count?: number;
+  name: string;
+  code: string;
+  instructor: string;
+  students: number;
+  status: 'active' | 'inactive';
 }
 
-export default function ManagementScreen() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'users' | 'courses'>('users');
-  const [users, setUsers] = useState<User[]>([]);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+const mockUsers: User[] = [
+  {
+    id: '1',
+    name: 'John Smith',
+    email: 'john.smith@university.edu',
+    role: 'teacher',
+    department: 'Computer Science',
+    status: 'active',
+    joinDate: '2023-09-01',
+  },
+  {
+    id: '2',
+    name: 'Sarah Johnson',
+    email: 'sarah.j@university.edu',
+    role: 'student',
+    department: 'Engineering',
+    status: 'active',
+    joinDate: '2024-01-15',
+  },
+  {
+    id: '3',
+    name: 'Michael Brown',
+    email: 'michael.brown@university.edu',
+    role: 'teacher',
+    department: 'Business',
+    status: 'active',
+    joinDate: '2023-08-20',
+  },
+];
 
-  // Only allow access for admins
-  if (user?.profile?.role !== 'admin') {
-    return (
-      <View style={styles.container}>
-        <View style={styles.accessDenied}>
-          <Crown size={48} color="#EF4444" />
-          <Text style={styles.accessDeniedTitle}>Access Denied</Text>
-          <Text style={styles.accessDeniedText}>
-            This section is only available to administrators.
-          </Text>
-        </View>
-      </View>
-    );
-  }
+const mockCourses: Course[] = [
+  {
+    id: '1',
+    name: 'Advanced Mathematics',
+    code: 'MATH301',
+    instructor: 'Dr. Smith',
+    students: 45,
+    status: 'active',
+  },
+  {
+    id: '2',
+    name: 'Computer Science Fundamentals',
+    code: 'CS101',
+    instructor: 'Prof. Johnson',
+    students: 120,
+    status: 'active',
+  },
+  {
+    id: '3',
+    name: 'Business Analytics',
+    code: 'BUS205',
+    instructor: 'Dr. Brown',
+    students: 78,
+    status: 'active',
+  },
+];
+
+export default function ManagementScreen() {
+  const insets = useSafeAreaInsets();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const [activeTab, setActiveTab] = useState<'users' | 'courses'>('users');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (activeTab === 'users') {
-      loadUsers();
-    } else {
-      loadCourses();
-    }
-  }, [activeTab]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
-  const loadUsers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error loading users:', error);
-      Alert.alert('Error', 'Failed to load users');
-    }
-  };
-
-  const loadCourses = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('courses')
-        .select(`
-          *,
-          profiles!courses_teacher_id_fkey (
-            full_name
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const coursesWithTeacher = data?.map(course => ({
-        ...course,
-        teacher_name: course.profiles?.full_name || 'Unknown Teacher',
-      })) || [];
-
-      setCourses(coursesWithTeacher);
-    } catch (error) {
-      console.error('Error loading courses:', error);
-      Alert.alert('Error', 'Failed to load courses');
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    Alert.alert(
-      'Delete User',
-      'Are you sure you want to delete this user? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', userId);
-
-              if (error) throw error;
-              
-              Alert.alert('Success', 'User deleted successfully');
-              loadUsers();
-            } catch (error) {
-              console.error('Error deleting user:', error);
-              Alert.alert('Error', 'Failed to delete user');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRoleChange = async (userId: string, newRole: 'student' | 'teacher' | 'admin') => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
-
-      if (error) throw error;
-      
-      Alert.alert('Success', 'User role updated successfully');
-      loadUsers();
-    } catch (error) {
-      console.error('Error updating role:', error);
-      Alert.alert('Error', 'Failed to update user role');
-    }
-  };
-
-  const getRoleIcon = (role: string) => {
+  const getRoleIcon = (role: 'student' | 'teacher' | 'dean') => {
     switch (role) {
-      case 'admin':
-        return <Crown size={16} color="#EF4444" />;
+      case 'student':
+        return GraduationCap;
       case 'teacher':
-        return <GraduationCap size={16} color="#2563EB" />;
+        return BookOpen;
+      case 'dean':
+        return Shield;
       default:
-        return <User size={16} color="#6B7280" />;
+        return Users;
     }
   };
 
-  const getRoleColor = (role: string) => {
+  const getRoleColor = (role: 'student' | 'teacher' | 'dean'): [string, string] => {
     switch (role) {
-      case 'admin':
-        return '#EF4444';
+      case 'student':
+        return ['#3B82F6', '#1D4ED8'];
       case 'teacher':
-        return '#2563EB';
+        return ['#10B981', '#059669'];
+      case 'dean':
+        return ['#8B5CF6', '#7C3AED'];
       default:
-        return '#6B7280';
+        return ['#6B7280', '#4B5563'];
     }
   };
 
-  const filteredUsers = users.filter(user =>
-    user.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  const getStatusColor = (status: 'active' | 'inactive') => {
+    return status === 'active' ? '#10B981' : '#EF4444';
+  };
+
+  const filteredUsers = mockUsers.filter(user =>
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.department.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredCourses = courses.filter(course =>
-    course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    course.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredCourses = mockCourses.filter(course =>
+    course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    course.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    course.instructor.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#EF4444', '#DC2626']}
-        style={styles.header}
+        colors={['#F8FAFC', '#F1F5F9', '#E2E8F0']}
+        style={StyleSheet.absoluteFillObject}
+      />
+
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top }]}
       >
-        <Text style={styles.headerTitle}>Management</Text>
-        <Text style={styles.headerSubtitle}>System Administration</Text>
-      </LinearGradient>
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
+        <Animated.View
           style={[
-            styles.tab,
-            activeTab === 'users' && styles.activeTab,
+            styles.header,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
           ]}
-          onPress={() => setActiveTab('users')}
         >
-          <Users size={18} color={activeTab === 'users' ? '#FFFFFF' : '#6B7280'} />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'users' && styles.activeTabText,
-            ]}
-          >
-            Users ({users.length})
+          <Text style={styles.title}>Management Center</Text>
+          <Text style={styles.subtitle}>
+            Manage users, courses, and system settings
           </Text>
-        </TouchableOpacity>
+        </Animated.View>
 
-        <TouchableOpacity
+        {/* Tab Navigation */}
+        <Animated.View
           style={[
-            styles.tab,
-            activeTab === 'courses' && styles.activeTab,
+            styles.tabContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
           ]}
-          onPress={() => setActiveTab('courses')}
         >
-          <BookOpen size={18} color={activeTab === 'courses' ? '#FFFFFF' : '#6B7280'} />
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'courses' && styles.activeTabText,
-            ]}
-          >
-            Courses ({courses.length})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <Search size={20} color="#6B7280" style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={`Search ${activeTab}...`}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#9CA3AF"
-        />
-      </View>
-
-      <ScrollView style={styles.content}>
-        {activeTab === 'users' ? (
-          <View style={styles.itemsList}>
-            {filteredUsers.map((userItem) => (
-              <View key={userItem.id} style={styles.itemCard}>
-                <View style={styles.itemHeader}>
-                  <View style={styles.itemInfo}>
-                    {getRoleIcon(userItem.role)}
-                    <View style={styles.itemDetails}>
-                      <Text style={styles.itemTitle}>
-                        {userItem.full_name || 'No Name'}
-                      </Text>
-                      <Text style={styles.itemSubtitle}>{userItem.email}</Text>
-                    </View>
-                  </View>
-                  <View style={[
-                    styles.roleBadge,
-                    { backgroundColor: getRoleColor(userItem.role) + '20' }
-                  ]}>
-                    <Text style={[
-                      styles.roleText,
-                      { color: getRoleColor(userItem.role) }
-                    ]}>
-                      {userItem.role}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.itemActions}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => {
-                      Alert.alert(
-                        'Change Role',
-                        `Select new role for ${userItem.full_name || userItem.email}:`,
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Student',
-                            onPress: () => handleRoleChange(userItem.id, 'student'),
-                          },
-                          {
-                            text: 'Teacher',
-                            onPress: () => handleRoleChange(userItem.id, 'teacher'),
-                          },
-                          {
-                            text: 'Admin',
-                            onPress: () => handleRoleChange(userItem.id, 'admin'),
-                          },
-                        ]
-                      );
-                    }}
-                  >
-                    <Edit size={16} color="#2563EB" />
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleDeleteUser(userItem.id)}
-                  >
-                    <Trash2 size={16} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
+          <View style={styles.tabButtons}>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'users' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('users')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={activeTab === 'users' ? ['#8B5CF6', '#7C3AED'] : ['transparent', 'transparent']}
+                style={styles.tabButtonGradient}
+              >
+                <Users color={activeTab === 'users' ? 'white' : '#6B7280'} size={20} />
+                <Text style={[styles.tabButtonText, activeTab === 'users' && styles.tabButtonTextActive]}>
+                  Users
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'courses' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('courses')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={activeTab === 'courses' ? ['#8B5CF6', '#7C3AED'] : ['transparent', 'transparent']}
+                style={styles.tabButtonGradient}
+              >
+                <BookOpen color={activeTab === 'courses' ? 'white' : '#6B7280'} size={20} />
+                <Text style={[styles.tabButtonText, activeTab === 'courses' && styles.tabButtonTextActive]}>
+                  Courses
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-        ) : (
-          <View style={styles.itemsList}>
-            {filteredCourses.map((course) => (
-              <View key={course.id} style={styles.itemCard}>
-                <View style={styles.itemHeader}>
-                  <View style={styles.itemInfo}>
-                    <BookOpen size={16} color="#2563EB" />
-                    <View style={styles.itemDetails}>
-                      <Text style={styles.itemTitle}>{course.title}</Text>
-                      <Text style={styles.itemSubtitle}>
-                        Teacher: {course.teacher_name}
-                      </Text>
-                      {course.description && (
-                        <Text style={styles.itemDescription} numberOfLines={2}>
-                          {course.description}
+        </Animated.View>
+
+        {/* Search Bar */}
+        <Animated.View
+          style={[
+            styles.searchContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)']}
+            style={styles.searchBar}
+          >
+            <Search color="#6B7280" size={20} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder={`Search ${activeTab}...`}
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <TouchableOpacity style={styles.filterButton}>
+              <Filter color="#6B7280" size={20} />
+            </TouchableOpacity>
+          </LinearGradient>
+        </Animated.View>
+
+        {/* Add Button */}
+        <Animated.View
+          style={[
+            styles.addButtonContainer,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.addButton} activeOpacity={0.8}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.addButtonGradient}
+            >
+              <UserPlus color="white" size={20} />
+              <Text style={styles.addButtonText}>
+                Add {activeTab === 'users' ? 'User' : 'Course'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Content */}
+        <Animated.View
+          style={[
+            styles.contentSection,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          {activeTab === 'users' ? (
+            // Users List
+            <View style={styles.listContainer}>
+              {filteredUsers.map((user, index) => {
+                const RoleIcon = getRoleIcon(user.role);
+                return (
+                  <Animated.View
+                    key={user.id}
+                    style={[
+                      styles.listItem,
+                      {
+                        opacity: fadeAnim,
+                        transform: [{ translateX: slideAnim }],
+                      },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)']}
+                      style={styles.listItemGradient}
+                    >
+                      <View style={styles.listItemHeader}>
+                        <View style={styles.listItemInfo}>
+                          <LinearGradient
+                            colors={getRoleColor(user.role)}
+                            style={styles.roleIconContainer}
+                          >
+                            <RoleIcon color="white" size={16} />
+                          </LinearGradient>
+                          <View style={styles.userInfo}>
+                            <Text style={styles.userName}>{user.name}</Text>
+                            <Text style={styles.userEmail}>{user.email}</Text>
+                            <Text style={styles.userDepartment}>{user.department}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.listItemActions}>
+                          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(user.status) }]}>
+                            <Text style={styles.statusText}>{user.status}</Text>
+                          </View>
+                          <TouchableOpacity style={styles.actionButton}>
+                            <MoreVertical color="#6B7280" size={16} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                      <View style={styles.listItemFooter}>
+                        <Text style={styles.joinDate}>
+                          Joined: {new Date(user.joinDate).toLocaleDateString()}
                         </Text>
-                      )}
+                        <View style={styles.actionButtons}>
+                          <TouchableOpacity style={styles.editButton}>
+                            <Edit color="#3B82F6" size={14} />
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.deleteButton}>
+                            <Trash2 color="#EF4444" size={14} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          ) : (
+            // Courses List
+            <View style={styles.listContainer}>
+              {filteredCourses.map((course, index) => (
+                <Animated.View
+                  key={course.id}
+                  style={[
+                    styles.listItem,
+                    {
+                      opacity: fadeAnim,
+                      transform: [{ translateX: slideAnim }],
+                    },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)']}
+                    style={styles.listItemGradient}
+                  >
+                    <View style={styles.listItemHeader}>
+                      <View style={styles.listItemInfo}>
+                        <LinearGradient
+                          colors={['#F59E0B', '#D97706']}
+                          style={styles.roleIconContainer}
+                        >
+                          <BookOpen color="white" size={16} />
+                        </LinearGradient>
+                        <View style={styles.courseInfo}>
+                          <Text style={styles.courseName}>{course.name}</Text>
+                          <Text style={styles.courseCode}>{course.code}</Text>
+                          <Text style={styles.courseInstructor}>
+                            Instructor: {course.instructor}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.listItemActions}>
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(course.status) }]}>
+                          <Text style={styles.statusText}>{course.status}</Text>
+                        </View>
+                        <TouchableOpacity style={styles.actionButton}>
+                          <MoreVertical color="#6B7280" size={16} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-                </View>
-
-                <View style={styles.courseStats}>
-                  <Text style={styles.statText}>
-                    Created: {new Date(course.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {(activeTab === 'users' ? filteredUsers : filteredCourses).length === 0 && (
-          <View style={styles.emptyState}>
-            {activeTab === 'users' ? (
-              <Users size={48} color="#9CA3AF" />
-            ) : (
-              <BookOpen size={48} color="#9CA3AF" />
-            )}
-            <Text style={styles.emptyTitle}>
-              No {activeTab} found
-            </Text>
-            <Text style={styles.emptyText}>
-              {searchQuery 
-                ? `No ${activeTab} match your search criteria`
-                : `No ${activeTab} available yet`
-              }
-            </Text>
-          </View>
-        )}
+                    <View style={styles.listItemFooter}>
+                      <Text style={styles.studentCount}>
+                        {course.students} Students Enrolled
+                      </Text>
+                      <View style={styles.actionButtons}>
+                        <TouchableOpacity style={styles.editButton}>
+                          <Edit color="#3B82F6" size={14} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.deleteButton}>
+                          <Trash2 color="#EF4444" size={14} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </Animated.View>
+              ))}
+            </View>
+          )}
+        </Animated.View>
       </ScrollView>
     </View>
   );
@@ -365,195 +425,228 @@ export default function ManagementScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 24,
     paddingHorizontal: 24,
+    paddingTop: 40,
+    paddingBottom: 30,
+    alignItems: 'center',
   },
-  headerTitle: {
+  title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  headerSubtitle: {
-    fontSize: 16,
-    color: '#FECACA',
-    marginTop: 4,
-  },
-  accessDenied: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  accessDeniedTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
     color: '#1F2937',
-    marginTop: 16,
+    marginBottom: 8,
   },
-  accessDeniedText: {
+  subtitle: {
     fontSize: 16,
     color: '#6B7280',
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 22,
   },
   tabContainer: {
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  tabButtons: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    marginTop: -12,
+    backgroundColor: 'rgba(255,255,255,0.8)',
     borderRadius: 12,
     padding: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  tab: {
+  tabButton: {
     flex: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  tabButtonActive: {
+    elevation: 2,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  tabButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    gap: 8,
   },
-  activeTab: {
-    backgroundColor: '#EF4444',
-  },
-  tabText: {
+  tabButtonText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#6B7280',
-    marginLeft: 6,
   },
-  activeTabText: {
-    color: '#FFFFFF',
+  tabButtonTextActive: {
+    color: 'white',
   },
   searchContainer: {
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    marginTop: 16,
     paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchIcon: {
-    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(107, 114, 128, 0.2)',
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 16,
     fontSize: 16,
     color: '#1F2937',
+    marginLeft: 12,
   },
-  content: {
-    flex: 1,
+  filterButton: {
+    padding: 4,
+  },
+  addButtonContainer: {
     paddingHorizontal: 24,
-    paddingTop: 16,
+    marginBottom: 20,
   },
-  itemsList: {
-    paddingBottom: 24,
-  },
-  itemCard: {
-    backgroundColor: '#FFFFFF',
+  addButton: {
     borderRadius: 12,
+    overflow: 'hidden',
+  },
+  addButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  contentSection: {
+    paddingHorizontal: 24,
+  },
+  listContainer: {
+    gap: 16,
+  },
+  listItem: {
+    marginBottom: 16,
+  },
+  listItemGradient: {
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  itemHeader: {
+  listItemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  itemInfo: {
+  listItemInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     flex: 1,
   },
-  itemDetails: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  itemSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  itemDescription: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  roleText: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  itemActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 6,
-    backgroundColor: '#F3F4F6',
-  },
-  courseStats: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  statText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  emptyState: {
+  roleIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
+    marginRight: 12,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#1F2937',
-    marginTop: 16,
+    marginBottom: 2,
   },
-  emptyText: {
+  userEmail: {
     fontSize: 14,
     color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
+    marginBottom: 2,
+  },
+  userDepartment: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  courseInfo: {
+    flex: 1,
+  },
+  courseName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  courseCode: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 2,
+  },
+  courseInstructor: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  listItemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: 'white',
+    textTransform: 'uppercase',
+  },
+  actionButton: {
+    padding: 4,
+  },
+  listItemFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  joinDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  studentCount: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  },
+  deleteButton: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
   },
 });

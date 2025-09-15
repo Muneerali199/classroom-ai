@@ -1,620 +1,533 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions,
+  Animated,
 } from 'react-native';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChartBar as BarChart3, TrendingUp, Users, Calendar, CircleCheck as CheckCircle, Clock, Award, Download } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { 
+  TrendingUp, 
+  Users, 
+  BookOpen, 
+  Award, 
+  Calendar,
+  BarChart3,
+  PieChart,
+  Activity
+} from 'lucide-react-native';
 
-const { width } = Dimensions.get('window');
-
-interface AnalyticsData {
-  totalStudents: number;
-  totalCourses: number;
-  totalActivities: number;
-  overallAttendanceRate: number;
-  weeklyAttendance: number[];
-  monthlyStats: {
-    present: number;
-    absent: number;
-    late: number;
-  };
-  topPerformers: Array<{
-    student_name: string;
-    attendance_rate: number;
-  }>;
+interface AnalyticsCard {
+  id: string;
+  title: string;
+  value: string;
+  change: string;
+  trend: 'up' | 'down' | 'stable';
+  icon: React.ComponentType<any>;
+  color: [string, string];
 }
 
-export default function AnalyticsScreen() {
-  const { user } = useAuth();
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
-    totalStudents: 0,
-    totalCourses: 0,
-    totalActivities: 0,
-    overallAttendanceRate: 0,
-    weeklyAttendance: [0, 0, 0, 0, 0, 0, 0],
-    monthlyStats: { present: 0, absent: 0, late: 0 },
-    topPerformers: [],
-  });
-  const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('week');
-  const [loading, setLoading] = useState(false);
+interface DepartmentData {
+  name: string;
+  students: number;
+  attendance: number;
+  gpa: number;
+  color: [string, string];
+}
 
-  const role = user?.profile?.role;
+const analyticsCards: AnalyticsCard[] = [
+  {
+    id: '1',
+    title: 'Total Students',
+    value: '2,847',
+    change: '+12%',
+    trend: 'up',
+    icon: Users,
+    color: ['#3B82F6', '#1D4ED8'],
+  },
+  {
+    id: '2',
+    title: 'Overall Attendance',
+    value: '89.2%',
+    change: '+2.1%',
+    trend: 'up',
+    icon: Calendar,
+    color: ['#10B981', '#059669'],
+  },
+  {
+    id: '3',
+    title: 'Average GPA',
+    value: '3.42',
+    change: '+0.15',
+    trend: 'up',
+    icon: Award,
+    color: ['#8B5CF6', '#7C3AED'],
+  },
+  {
+    id: '4',
+    title: 'Active Courses',
+    value: '124',
+    change: '+8',
+    trend: 'up',
+    icon: BookOpen,
+    color: ['#F59E0B', '#D97706'],
+  },
+];
+
+const departmentData: DepartmentData[] = [
+  {
+    name: 'Computer Science',
+    students: 856,
+    attendance: 92,
+    gpa: 3.6,
+    color: ['#3B82F6', '#1D4ED8'],
+  },
+  {
+    name: 'Engineering',
+    students: 742,
+    attendance: 88,
+    gpa: 3.4,
+    color: ['#10B981', '#059669'],
+  },
+  {
+    name: 'Business',
+    students: 634,
+    attendance: 85,
+    gpa: 3.3,
+    color: ['#8B5CF6', '#7C3AED'],
+  },
+  {
+    name: 'Arts & Sciences',
+    students: 615,
+    attendance: 91,
+    gpa: 3.5,
+    color: ['#F59E0B', '#D97706'],
+  },
+];
+
+export default function AnalyticsScreen() {
+  const insets = useSafeAreaInsets();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
-    loadAnalyticsData();
-  }, [user, selectedPeriod]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
-  const loadAnalyticsData = async () => {
-    if (!user) return;
-
-    setLoading(true);
-    try {
-      if (role === 'student') {
-        await loadStudentAnalytics();
-      } else if (role === 'teacher') {
-        await loadTeacherAnalytics();
-      } else if (role === 'admin') {
-        await loadAdminAnalytics();
-      }
-    } catch (error) {
-      console.error('Error loading analytics:', error);
-    } finally {
-      setLoading(false);
+  const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
+    switch (trend) {
+      case 'up':
+        return TrendingUp;
+      case 'down':
+        return Activity;
+      default:
+        return Activity;
     }
   };
 
-  const loadStudentAnalytics = async () => {
-    // Get student's enrolled courses
-    const { data: enrollments } = await supabase
-      .from('enrollments')
-      .select('course_id')
-      .eq('student_id', user!.id);
-
-    const courseIds = enrollments?.map(e => e.course_id) || [];
-
-    // Get activities for enrolled courses
-    const { data: activities } = await supabase
-      .from('activities')
-      .select('*')
-      .in('course_id', courseIds);
-
-    // Get attendance records
-    const { data: attendance } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('student_id', user!.id);
-
-    const totalActivities = activities?.length || 0;
-    const attendanceRecords = attendance || [];
-    const presentCount = attendanceRecords.filter(a => a.status === 'present').length;
-    const attendanceRate = totalActivities > 0 ? (presentCount / totalActivities) * 100 : 0;
-
-    // Calculate monthly stats
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthlyAttendance = attendanceRecords.filter(a => 
-      new Date(a.created_at) >= monthStart
-    );
-
-    setAnalyticsData({
-      totalStudents: 1, // Student sees only themselves
-      totalCourses: courseIds.length,
-      totalActivities,
-      overallAttendanceRate: Math.round(attendanceRate),
-      weeklyAttendance: calculateWeeklyAttendance(attendanceRecords),
-      monthlyStats: {
-        present: monthlyAttendance.filter(a => a.status === 'present').length,
-        absent: monthlyAttendance.filter(a => a.status === 'absent').length,
-        late: monthlyAttendance.filter(a => a.status === 'late').length,
-      },
-      topPerformers: [], // Not applicable for students
-    });
-  };
-
-  const loadTeacherAnalytics = async () => {
-    // Get teacher's courses
-    const { data: courses } = await supabase
-      .from('courses')
-      .select('*')
-      .eq('teacher_id', user!.id);
-
-    const courseIds = courses?.map(c => c.id) || [];
-
-    // Get activities for teacher's courses
-    const { data: activities } = await supabase
-      .from('activities')
-      .select('*')
-      .in('course_id', courseIds);
-
-    const activityIds = activities?.map(a => a.id) || [];
-
-    // Get attendance for teacher's activities
-    const { data: attendance } = await supabase
-      .from('attendance')
-      .select(`
-        *,
-        profiles!attendance_student_id_fkey (
-          full_name
-        )
-      `)
-      .in('activity_id', activityIds);
-
-    // Get unique students
-    const uniqueStudentIds = [...new Set(attendance?.map(a => a.student_id) || [])];
-    
-    const totalActivities = activities?.length || 0;
-    const attendanceRecords = attendance || [];
-    const presentCount = attendanceRecords.filter(a => a.status === 'present').length;
-    const attendanceRate = attendanceRecords.length > 0 ? (presentCount / attendanceRecords.length) * 100 : 0;
-
-    // Calculate top performers
-    const studentStats = uniqueStudentIds.map(studentId => {
-      const studentAttendance = attendanceRecords.filter(a => a.student_id === studentId);
-      const studentPresent = studentAttendance.filter(a => a.status === 'present').length;
-      const studentRate = studentAttendance.length > 0 ? (studentPresent / studentAttendance.length) * 100 : 0;
-      const studentName = studentAttendance[0]?.profiles?.full_name || 'Unknown';
-      
-      return {
-        student_name: studentName,
-        attendance_rate: Math.round(studentRate),
-      };
-    }).sort((a, b) => b.attendance_rate - a.attendance_rate).slice(0, 5);
-
-    // Calculate monthly stats
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthlyAttendance = attendanceRecords.filter(a => 
-      new Date(a.created_at) >= monthStart
-    );
-
-    setAnalyticsData({
-      totalStudents: uniqueStudentIds.length,
-      totalCourses: courseIds.length,
-      totalActivities,
-      overallAttendanceRate: Math.round(attendanceRate),
-      weeklyAttendance: calculateWeeklyAttendance(attendanceRecords),
-      monthlyStats: {
-        present: monthlyAttendance.filter(a => a.status === 'present').length,
-        absent: monthlyAttendance.filter(a => a.status === 'absent').length,
-        late: monthlyAttendance.filter(a => a.status === 'late').length,
-      },
-      topPerformers: studentStats,
-    });
-  };
-
-  const loadAdminAnalytics = async () => {
-    // Get all data for admin
-    const [coursesData, activitiesData, attendanceData, profilesData] = await Promise.all([
-      supabase.from('courses').select('*'),
-      supabase.from('activities').select('*'),
-      supabase.from('attendance').select(`
-        *,
-        profiles!attendance_student_id_fkey (
-          full_name
-        )
-      `),
-      supabase.from('profiles').select('*').eq('role', 'student'),
-    ]);
-
-    const courses = coursesData.data || [];
-    const activities = activitiesData.data || [];
-    const attendance = attendanceData.data || [];
-    const students = profilesData.data || [];
-
-    const presentCount = attendance.filter(a => a.status === 'present').length;
-    const attendanceRate = attendance.length > 0 ? (presentCount / attendance.length) * 100 : 0;
-
-    // Calculate top performers
-    const studentStats = students.map(student => {
-      const studentAttendance = attendance.filter(a => a.student_id === student.id);
-      const studentPresent = studentAttendance.filter(a => a.status === 'present').length;
-      const studentRate = studentAttendance.length > 0 ? (studentPresent / studentAttendance.length) * 100 : 0;
-      
-      return {
-        student_name: student.full_name || 'Unknown',
-        attendance_rate: Math.round(studentRate),
-      };
-    }).sort((a, b) => b.attendance_rate - a.attendance_rate).slice(0, 5);
-
-    // Calculate monthly stats
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthlyAttendance = attendance.filter(a => 
-      new Date(a.created_at) >= monthStart
-    );
-
-    setAnalyticsData({
-      totalStudents: students.length,
-      totalCourses: courses.length,
-      totalActivities: activities.length,
-      overallAttendanceRate: Math.round(attendanceRate),
-      weeklyAttendance: calculateWeeklyAttendance(attendance),
-      monthlyStats: {
-        present: monthlyAttendance.filter(a => a.status === 'present').length,
-        absent: monthlyAttendance.filter(a => a.status === 'absent').length,
-        late: monthlyAttendance.filter(a => a.status === 'late').length,
-      },
-      topPerformers: studentStats,
-    });
-  };
-
-  const calculateWeeklyAttendance = (attendanceRecords: any[]) => {
-    const now = new Date();
-    const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-    const weeklyData = [0, 0, 0, 0, 0, 0, 0]; // Sun to Sat
-
-    attendanceRecords.forEach(record => {
-      const recordDate = new Date(record.created_at);
-      if (recordDate >= weekStart) {
-        const dayIndex = recordDate.getDay();
-        if (record.status === 'present') {
-          weeklyData[dayIndex]++;
-        }
-      }
-    });
-
-    return weeklyData;
-  };
-
-  const exportReport = async () => {
-    // Implementation for exporting reports
-    // This would typically generate a PDF or CSV file
-    console.log('Export report functionality');
-  };
-
-  const renderBarChart = () => {
-    const maxValue = Math.max(...analyticsData.weeklyAttendance, 1);
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-    return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>Weekly Attendance</Text>
-        <View style={styles.chart}>
-          {analyticsData.weeklyAttendance.map((value, index) => (
-            <View key={index} style={styles.barContainer}>
-              <View
-                style={[
-                  styles.bar,
-                  {
-                    height: (value / maxValue) * 100 || 4,
-                    backgroundColor: value > 0 ? '#10B981' : '#E5E7EB',
-                  },
-                ]}
-              />
-              <Text style={styles.barLabel}>{days[index]}</Text>
-              <Text style={styles.barValue}>{value}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-    );
+  const getTrendColor = (trend: 'up' | 'down' | 'stable') => {
+    switch (trend) {
+      case 'up':
+        return '#10B981';
+      case 'down':
+        return '#EF4444';
+      default:
+        return '#6B7280';
+    }
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <LinearGradient
-        colors={['#8B5CF6', '#7C3AED']}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Analytics</Text>
-        <Text style={styles.headerSubtitle}>
-          {role === 'student' ? 'Your Performance' : 'Performance Overview'}
-        </Text>
-        
-        <TouchableOpacity style={styles.exportButton} onPress={exportReport}>
-          <Download size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </LinearGradient>
+        colors={['#F8FAFC', '#F1F5F9', '#E2E8F0']}
+        style={StyleSheet.absoluteFillObject}
+      />
 
-      <View style={styles.periodSelector}>
-        {(['week', 'month', 'year'] as const).map((period) => (
-          <TouchableOpacity
-            key={period}
-            style={[
-              styles.periodButton,
-              selectedPeriod === period && styles.periodButtonActive,
-            ]}
-            onPress={() => setSelectedPeriod(period)}
-          >
-            <Text
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top }]}
+      >
+        <Animated.View
+          style={[
+            styles.header,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <Text style={styles.title}>Institution Analytics</Text>
+          <Text style={styles.subtitle}>
+            Comprehensive insights and performance metrics
+          </Text>
+        </Animated.View>
+
+        {/* Key Metrics */}
+        <Animated.View
+          style={[
+            styles.metricsSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View style={styles.metricsGrid}>
+            {analyticsCards.map((card, index) => {
+              const TrendIcon = getTrendIcon(card.trend);
+              return (
+                <Animated.View
+                  key={card.id}
+                  style={[
+                    styles.metricCard,
+                    {
+                      opacity: fadeAnim,
+                      transform: [
+                        {
+                          scale: fadeAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.8, 1],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <LinearGradient
+                    colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)']}
+                    style={styles.metricCardGradient}
+                  >
+                    <View style={styles.metricHeader}>
+                      <LinearGradient
+                        colors={card.color}
+                        style={styles.metricIconContainer}
+                      >
+                        <card.icon color="white" size={20} />
+                      </LinearGradient>
+                      <View style={styles.metricTrend}>
+                        <TrendIcon color={getTrendColor(card.trend)} size={16} />
+                      </View>
+                    </View>
+                    <Text style={styles.metricValue}>{card.value}</Text>
+                    <Text style={styles.metricTitle}>{card.title}</Text>
+                    <Text style={[styles.metricChange, { color: getTrendColor(card.trend) }]}>
+                      {card.change} from last month
+                    </Text>
+                  </LinearGradient>
+                </Animated.View>
+              );
+            })}
+          </View>
+        </Animated.View>
+
+        {/* Department Performance */}
+        <Animated.View
+          style={[
+            styles.departmentSection,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          <Text style={styles.sectionTitle}>Department Performance</Text>
+          {departmentData.map((dept, index) => (
+            <Animated.View
+              key={dept.name}
               style={[
-                styles.periodButtonText,
-                selectedPeriod === period && styles.periodButtonTextActive,
+                styles.departmentCard,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateX: slideAnim }],
+                },
               ]}
             >
-              {period.charAt(0).toUpperCase() + period.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: '#EFF6FF' }]}>
-            <Users size={24} color="#2563EB" />
-            <Text style={styles.statNumber}>{analyticsData.totalStudents}</Text>
-            <Text style={styles.statLabel}>
-              {role === 'student' ? 'You' : 'Students'}
-            </Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: '#F0F9FF' }]}>
-            <Calendar size={24} color="#0EA5E9" />
-            <Text style={styles.statNumber}>{analyticsData.totalCourses}</Text>
-            <Text style={styles.statLabel}>Courses</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: '#F0FDF4' }]}>
-            <CheckCircle size={24} color="#10B981" />
-            <Text style={styles.statNumber}>{analyticsData.totalActivities}</Text>
-            <Text style={styles.statLabel}>Activities</Text>
-          </View>
-
-          <View style={[styles.statCard, { backgroundColor: '#FEF3C7' }]}>
-            <TrendingUp size={24} color="#F59E0B" />
-            <Text style={styles.statNumber}>{analyticsData.overallAttendanceRate}%</Text>
-            <Text style={styles.statLabel}>Attendance Rate</Text>
-          </View>
-        </View>
-
-        {renderBarChart()}
-
-        <View style={styles.monthlyStatsContainer}>
-          <Text style={styles.sectionTitle}>Monthly Overview</Text>
-          <View style={styles.monthlyStats}>
-            <View style={styles.monthlyStatItem}>
-              <CheckCircle size={20} color="#10B981" />
-              <Text style={styles.monthlyStatNumber}>{analyticsData.monthlyStats.present}</Text>
-              <Text style={styles.monthlyStatLabel}>Present</Text>
-            </View>
-            <View style={styles.monthlyStatItem}>
-              <Clock size={20} color="#F59E0B" />
-              <Text style={styles.monthlyStatNumber}>{analyticsData.monthlyStats.late}</Text>
-              <Text style={styles.monthlyStatLabel}>Late</Text>
-            </View>
-            <View style={styles.monthlyStatItem}>
-              <Users size={20} color="#EF4444" />
-              <Text style={styles.monthlyStatNumber}>{analyticsData.monthlyStats.absent}</Text>
-              <Text style={styles.monthlyStatLabel}>Absent</Text>
-            </View>
-          </View>
-        </View>
-
-        {role !== 'student' && analyticsData.topPerformers.length > 0 && (
-          <View style={styles.topPerformersContainer}>
-            <Text style={styles.sectionTitle}>Top Performers</Text>
-            {analyticsData.topPerformers.map((performer, index) => (
-              <View key={index} style={styles.performerItem}>
-                <View style={styles.performerRank}>
-                  <Award size={16} color="#F59E0B" />
-                  <Text style={styles.rankText}>{index + 1}</Text>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)']}
+                style={styles.departmentCardGradient}
+              >
+                <View style={styles.departmentHeader}>
+                  <View style={styles.departmentInfo}>
+                    <Text style={styles.departmentName}>{dept.name}</Text>
+                    <Text style={styles.departmentStudents}>
+                      {dept.students} Students
+                    </Text>
+                  </View>
+                  <LinearGradient
+                    colors={dept.color}
+                    style={styles.departmentBadge}
+                  >
+                    <Text style={styles.departmentBadgeText}>
+                      {dept.attendance}%
+                    </Text>
+                  </LinearGradient>
                 </View>
-                <Text style={styles.performerName}>{performer.student_name}</Text>
-                <Text style={styles.performerRate}>{performer.attendance_rate}%</Text>
-              </View>
-            ))}
+
+                <View style={styles.departmentMetrics}>
+                  <View style={styles.departmentMetric}>
+                    <Text style={styles.departmentMetricLabel}>Attendance</Text>
+                    <View style={styles.departmentProgressBar}>
+                      <LinearGradient
+                        colors={dept.color}
+                        style={[
+                          styles.departmentProgressFill,
+                          { width: `${dept.attendance}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.departmentMetric}>
+                    <Text style={styles.departmentMetricLabel}>
+                      Avg GPA: {dept.gpa}
+                    </Text>
+                    <View style={styles.departmentProgressBar}>
+                      <LinearGradient
+                        colors={dept.color}
+                        style={[
+                          styles.departmentProgressFill,
+                          { width: `${(dept.gpa / 4) * 100}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </LinearGradient>
+            </Animated.View>
+          ))}
+        </Animated.View>
+
+        {/* Quick Actions */}
+        <Animated.View
+          style={[
+            styles.actionsSection,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity style={styles.actionCard} activeOpacity={0.8}>
+              <LinearGradient
+                colors={['#3B82F6', '#1D4ED8']}
+                style={styles.actionGradient}
+              >
+                <BarChart3 color="white" size={24} />
+                <Text style={styles.actionText}>Generate Report</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionCard} activeOpacity={0.8}>
+              <LinearGradient
+                colors={['#10B981', '#059669']}
+                style={styles.actionGradient}
+              >
+                <PieChart color="white" size={24} />
+                <Text style={styles.actionText}>View Charts</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
-        )}
-      </View>
-    </ScrollView>
+        </Animated.View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 24,
     paddingHorizontal: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    paddingTop: 40,
+    paddingBottom: 30,
+    alignItems: 'center',
   },
-  headerTitle: {
+  title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: '#1F2937',
+    marginBottom: 8,
   },
-  headerSubtitle: {
+  subtitle: {
     fontSize: 16,
-    color: '#E5E7EB',
-    position: 'absolute',
-    bottom: 24,
-    left: 24,
-    marginTop: 4,
-  },
-  exportButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    marginTop: -12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  periodButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  periodButtonActive: {
-    backgroundColor: '#8B5CF6',
-  },
-  periodButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
     color: '#6B7280',
+    textAlign: 'center',
   },
-  periodButtonTextActive: {
-    color: '#FFFFFF',
+  metricsSection: {
+    paddingHorizontal: 24,
+    marginBottom: 30,
   },
-  content: {
-    padding: 24,
-  },
-  statsGrid: {
+  metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 24,
   },
-  statCard: {
+  metricCard: {
     width: '48%',
-    padding: 20,
-    borderRadius: 12,
-    alignItems: 'center',
     marginBottom: 16,
   },
-  statNumber: {
+  metricCardGradient: {
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  metricHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  metricIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricTrend: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricValue: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  chartContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  chart: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 120,
-  },
-  barContainer: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  bar: {
-    width: 20,
-    backgroundColor: '#10B981',
-    borderRadius: 2,
-    marginBottom: 8,
-    minHeight: 4,
-  },
-  barLabel: {
-    fontSize: 10,
-    color: '#6B7280',
     marginBottom: 4,
   },
-  barValue: {
+  metricTitle: {
     fontSize: 12,
+    color: '#6B7280',
     fontWeight: '600',
-    color: '#1F2937',
+    marginBottom: 4,
   },
-  monthlyStatsContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+  metricChange: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  departmentSection: {
+    paddingHorizontal: 24,
+    marginBottom: 30,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  monthlyStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  monthlyStatItem: {
-    alignItems: 'center',
-  },
-  monthlyStatNumber: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#1F2937',
-    marginTop: 8,
+    marginBottom: 16,
   },
-  monthlyStatLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
+  departmentCard: {
+    marginBottom: 16,
   },
-  topPerformersContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+  departmentCardGradient: {
+    borderRadius: 16,
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  performerItem: {
+  departmentHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    marginBottom: 16,
   },
-  performerRank: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 40,
-  },
-  rankText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#F59E0B',
-    marginLeft: 4,
-  },
-  performerName: {
+  departmentInfo: {
     flex: 1,
-    fontSize: 14,
-    color: '#1F2937',
-    marginLeft: 12,
   },
-  performerRate: {
+  departmentName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  departmentStudents: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  departmentBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  departmentBadgeText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  departmentMetrics: {
+    gap: 12,
+  },
+  departmentMetric: {
+    gap: 6,
+  },
+  departmentMetricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  departmentProgressBar: {
+    height: 6,
+    backgroundColor: 'rgba(107, 114, 128, 0.2)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  departmentProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  actionsSection: {
+    paddingHorizontal: 24,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  actionCard: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  actionGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    gap: 8,
+  },
+  actionText: {
+    color: 'white',
     fontSize: 14,
     fontWeight: '600',
-    color: '#10B981',
   },
 });
