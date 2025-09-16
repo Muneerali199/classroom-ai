@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Home, Info, BookOpen, BarChart3, Settings } from "lucide-react-native";
+import { Home, Info, MessageCircle, Calendar, Award, Users, BarChart3, Activity, Settings, User } from "lucide-react-native";
 import React from "react";
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -14,6 +14,16 @@ export default function TabLayout() {
         icon: Home,
       },
       {
+        name: "chatbot",
+        title: "AI Assistant",
+        icon: MessageCircle,
+      },
+      {
+        name: "profile",
+        title: "Profile",
+        icon: User,
+      },
+      {
         name: "about",
         title: "About",
         icon: Info,
@@ -23,35 +33,37 @@ export default function TabLayout() {
     switch (user?.role) {
       case 'student':
         return [
-          ...commonTabs,
+          ...commonTabs.slice(0, 1), // Dashboard
           {
             name: "schedule",
             title: "Schedule",
-            icon: BookOpen,
+            icon: Calendar,
           },
           {
             name: "grades",
             title: "Grades",
-            icon: BarChart3,
+            icon: Award,
           },
+          ...commonTabs.slice(1), // AI Assistant, Profile, and About
         ];
       case 'teacher':
         return [
-          ...commonTabs,
+          ...commonTabs.slice(0, 1), // Dashboard
           {
             name: "classes",
             title: "Classes",
-            icon: BookOpen,
+            icon: Users,
           },
           {
             name: "reports",
             title: "Reports",
             icon: BarChart3,
           },
+          ...commonTabs.slice(1), // AI Assistant, Profile, and About
         ];
       case 'dean':
         return [
-          ...commonTabs,
+          ...commonTabs.slice(0, 1), // Dashboard
           {
             name: "analytics",
             title: "Analytics",
@@ -62,6 +74,7 @@ export default function TabLayout() {
             title: "Management",
             icon: Settings,
           },
+          ...commonTabs.slice(1), // AI Assistant, Profile, and About
         ];
       default:
         return commonTabs;
