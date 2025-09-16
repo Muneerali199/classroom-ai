@@ -71,14 +71,19 @@ export default function OnboardingScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const handleCompleteOnboarding = () => {
-    completeOnboarding();
-    
-    if (user) {
-      router.replace('/(tabs)');
-    } else {
-      // Navigate to the index screen within the (auth) group
-      router.replace('/auth');
+  const handleCompleteOnboarding = async () => {
+    try {
+      await completeOnboarding();
+      
+      if (user) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/Auth');
+      }
+    } catch (error) {
+      console.error('Failed to complete onboarding:', error);
+      // Fallback navigation if completeOnboarding fails
+      router.replace(user ? '/(tabs)' : '/Auth');
     }
   };
 
@@ -161,13 +166,13 @@ export default function OnboardingScreen() {
 
       <ScrollView
         ref={scrollViewRef}
-        horizontal
-        pagingEnabled
+        horizontal={true}
+        pagingEnabled={true}
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={handleScroll}
         scrollEventThrottle={16}
       >
-        {slides.map((slide, index) => (
+        {slides.map((slide) => (
           <View key={slide.id} style={[styles.slide, { width }]}>
             <Animated.View
               style={[
