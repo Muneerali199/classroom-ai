@@ -10,7 +10,14 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Shield, Users, Zap, BookOpen, ChevronRight, ChevronLeft } from 'lucide-react-native';
+import {
+  Shield,
+  Users,
+  Zap,
+  BookOpen,
+  ChevronRight,
+  ChevronLeft,
+} from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { router } from 'expo-router';
 
@@ -29,7 +36,8 @@ const slides: OnboardingSlide[] = [
     id: '1',
     title: 'Secure Access',
     subtitle: 'Institution-Controlled Platform',
-    description: 'Dean-supervised access ensures complete data privacy and institutional oversight of all educational activities.',
+    description:
+      'Dean-supervised access ensures complete data privacy and institutional oversight of all educational activities.',
     icon: Shield,
     gradient: ['#667eea', '#764ba2'],
     backgroundColor: ['#f093fb', '#f5576c', '#4facfe'],
@@ -38,7 +46,8 @@ const slides: OnboardingSlide[] = [
     id: '2',
     title: 'Lightning Fast',
     subtitle: 'Real-time Attendance',
-    description: 'Mark attendance in seconds with real-time synchronization across all devices and platforms.',
+    description:
+      'Mark attendance in seconds with real-time synchronization across all devices and platforms.',
     icon: Zap,
     gradient: ['#f093fb', '#f5576c'],
     backgroundColor: ['#4facfe', '#00f2fe', '#43e97b'],
@@ -47,7 +56,8 @@ const slides: OnboardingSlide[] = [
     id: '3',
     title: 'For Everyone',
     subtitle: 'Students, Teachers & Deans',
-    description: 'Intuitive platform designed for all educational roles with personalized dashboards and features.',
+    description:
+      'Intuitive platform designed for all educational roles with personalized dashboards and features.',
     icon: Users,
     gradient: ['#4facfe', '#00f2fe'],
     backgroundColor: ['#43e97b', '#38f9d7', '#667eea'],
@@ -56,7 +66,8 @@ const slides: OnboardingSlide[] = [
     id: '4',
     title: 'Smart Learning',
     subtitle: 'Educational Excellence',
-    description: 'Advanced analytics and insights to improve educational outcomes and institutional performance.',
+    description:
+      'Advanced analytics and insights to improve educational outcomes and institutional performance.',
     icon: BookOpen,
     gradient: ['#43e97b', '#38f9d7'],
     backgroundColor: ['#667eea', '#764ba2', '#f093fb'],
@@ -64,26 +75,25 @@ const slides: OnboardingSlide[] = [
 ];
 
 export default function OnboardingScreen() {
-  const { user, completeOnboarding } = useAuth();
+  const { user, updateUser } = useAuth();
   const { width } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const handleCompleteOnboarding = async () => {
+  const finishOnboarding = async () => {
     try {
-      await completeOnboarding();
+      // Update the user's onboarding status in the auth context
+      // This will trigger the navigation logic in _layout.tsx
+      await updateUser({ hasCompletedOnboarding: true });
       
-      if (user) {
-        router.replace('/(tabs)');
-      } else {
-        router.replace('/Auth');
-      }
-    } catch (error) {
-      console.error('Failed to complete onboarding:', error);
-      // Fallback navigation if completeOnboarding fails
-      router.replace(user ? '/(tabs)' : '/Auth');
+      // The _layout.tsx will automatically handle navigation to (tabs)
+      console.log("Onboarding completed successfully");
+    } catch (err) {
+      console.error('Failed to update onboarding state:', err);
+      // Fallback navigation
+      router.replace('/(tabs)');
     }
   };
 
@@ -97,7 +107,7 @@ export default function OnboardingScreen() {
       });
       animateSlide();
     } else {
-      handleCompleteOnboarding();
+      finishOnboarding();
     }
   };
 
@@ -155,10 +165,10 @@ export default function OnboardingScreen() {
         colors={currentSlide.backgroundColor}
         style={StyleSheet.absoluteFillObject}
       />
-      
+
       <TouchableOpacity
         style={styles.skipButton}
-        onPress={handleCompleteOnboarding}
+        onPress={finishOnboarding}
         activeOpacity={0.7}
       >
         <Text style={styles.skipText}>Skip</Text>
@@ -166,8 +176,8 @@ export default function OnboardingScreen() {
 
       <ScrollView
         ref={scrollViewRef}
-        horizontal={true}
-        pagingEnabled={true}
+        horizontal
+        pagingEnabled
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={handleScroll}
         scrollEventThrottle={16}
@@ -177,16 +187,10 @@ export default function OnboardingScreen() {
             <Animated.View
               style={[
                 styles.iconContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                },
+                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
               ]}
             >
-              <LinearGradient
-                colors={slide.gradient}
-                style={styles.iconGradient}
-              >
+              <LinearGradient colors={slide.gradient} style={styles.iconGradient}>
                 <slide.icon color="white" size={60} />
               </LinearGradient>
             </Animated.View>
@@ -194,10 +198,7 @@ export default function OnboardingScreen() {
             <Animated.View
               style={[
                 styles.textContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                },
+                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
               ]}
             >
               <Text style={styles.title}>{slide.title}</Text>
@@ -216,7 +217,8 @@ export default function OnboardingScreen() {
               style={[
                 styles.dot,
                 {
-                  backgroundColor: index === currentIndex ? 'white' : 'rgba(255,255,255,0.4)',
+                  backgroundColor:
+                    index === currentIndex ? 'white' : 'rgba(255,255,255,0.4)',
                   width: index === currentIndex ? 24 : 8,
                 },
               ]}
@@ -236,7 +238,10 @@ export default function OnboardingScreen() {
           )}
 
           <TouchableOpacity
-            style={[styles.nextButton, { marginLeft: currentIndex === 0 ? 'auto' : 0 }]}
+            style={[
+              styles.nextButton,
+              { marginLeft: currentIndex === 0 ? 'auto' : 0 },
+            ]}
             onPress={handleNext}
             activeOpacity={0.8}
           >
@@ -257,9 +262,7 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   skipButton: {
     position: 'absolute',
     top: 60,
@@ -270,20 +273,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.2)',
   },
-  skipText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  skipText: { color: 'white', fontSize: 16, fontWeight: '600' },
   slide: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
   },
-  iconContainer: {
-    marginBottom: 60,
-  },
+  iconContainer: { marginBottom: 60 },
   iconGradient: {
     width: 120,
     height: 120,
@@ -292,9 +289,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     elevation: 10,
   },
-  textContainer: {
-    alignItems: 'center',
-  },
+  textContainer: { alignItems: 'center' },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
@@ -316,21 +311,14 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingHorizontal: 20,
   },
-  bottomContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
+  bottomContainer: { paddingHorizontal: 24, paddingBottom: 40 },
   pagination: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
   },
-  dot: {
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: 4,
-  },
+  dot: { height: 8, borderRadius: 4, marginHorizontal: 4 },
   navigationContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -344,10 +332,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nextButton: {
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
+  nextButton: { borderRadius: 25, overflow: 'hidden' },
   nextButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
