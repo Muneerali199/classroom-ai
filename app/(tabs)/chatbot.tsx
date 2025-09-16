@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { VoiceInterface } from '@/components/voiceinterface';
+import { VoiceInterface } from '@/components/VoiceInterface';
 import {
   Send,
   Bot,
