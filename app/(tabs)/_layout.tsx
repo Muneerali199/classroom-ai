@@ -1,10 +1,26 @@
 import { Tabs } from "expo-router";
-import { Home, Info, MessageCircle, Calendar, Award, Users, BarChart3, Activity, Settings, User } from "lucide-react-native";
+import { 
+  Home, 
+  MessageCircle, 
+  Calendar, 
+  Award, 
+  Users, 
+  BarChart3,  
+  Settings, 
+  User,
+  BookOpen,
+  ClipboardList,
+  PieChart,
+} from "lucide-react-native";
 import React from "react";
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
   const { user } = useAuth();
+
+  if (!user) {
+    return null;
+  }
 
   const getTabsForRole = () => {
     const commonTabs = [
@@ -23,11 +39,6 @@ export default function TabLayout() {
         title: "Profile",
         icon: User,
       },
-      {
-        name: "about",
-        title: "About",
-        icon: Info,
-      },
     ];
 
     switch (user?.role) {
@@ -35,16 +46,26 @@ export default function TabLayout() {
         return [
           ...commonTabs.slice(0, 1), // Dashboard
           {
-            name: "schedule",
-            title: "Schedule",
-            icon: Calendar,
-          },
-          {
             name: "grades",
             title: "Grades",
             icon: Award,
           },
-          ...commonTabs.slice(1), // AI Assistant, Profile, and About
+          {
+            name: "attendance",
+            title: "Attendance",
+            icon: Calendar,
+          },
+          {
+            name: "courses",
+            title: "Courses",
+            icon: BookOpen,
+          },
+          {
+            name: "schedule",
+            title: "Schedule",
+            icon: Calendar,
+          },
+          ...commonTabs.slice(1), // AI Assistant and Profile
         ];
       case 'teacher':
         return [
@@ -57,27 +78,74 @@ export default function TabLayout() {
           {
             name: "reports",
             title: "Reports",
-            icon: BarChart3,
+            icon: ClipboardList,
           },
-          ...commonTabs.slice(1), // AI Assistant, Profile, and About
+          {
+            name: "attendance",
+            title: "Attendance",
+            icon: Calendar,
+          },
+          ...commonTabs.slice(1), // AI Assistant and Profile
         ];
-      case 'dean':
+      case 'admin':
         return [
           ...commonTabs.slice(0, 1), // Dashboard
           {
             name: "analytics",
             title: "Analytics",
-            icon: BarChart3,
+            icon: PieChart,
           },
           {
             name: "management",
             title: "Management",
             icon: Settings,
           },
-          ...commonTabs.slice(1), // AI Assistant, Profile, and About
+          {
+            name: "reports",
+            title: "Reports",
+            icon: BarChart3,
+          },
+          ...commonTabs.slice(1), // AI Assistant and Profile
         ];
       default:
-        return commonTabs;
+        return [
+          ...commonTabs,
+          {
+            name: "grades",
+            title: "Grades",
+            icon: Award,
+          },
+          {
+            name: "attendance",
+            title: "Attendance",
+            icon: Calendar,
+          },
+          {
+            name: "courses",
+            title: "Courses",
+            icon: BookOpen,
+          },
+          {
+            name: "classes",
+            title: "Classes",
+            icon: Users,
+          },
+          {
+            name: "reports",
+            title: "Reports",
+            icon: ClipboardList,
+          },
+          {
+            name: "analytics",
+            title: "Analytics",
+            icon: PieChart,
+          },
+          {
+            name: "management",
+            title: "Management",
+            icon: Settings,
+          },
+        ];
     }
   };
 
@@ -96,10 +164,17 @@ export default function TabLayout() {
           shadowOpacity: 0.1,
           shadowOffset: { width: 0, height: -2 },
           shadowRadius: 10,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
         },
         tabBarLabelStyle: {
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: "600",
+          marginTop: 4,
+        },
+        tabBarIconStyle: {
+          marginBottom: -4,
         },
       }}
     >
@@ -109,7 +184,9 @@ export default function TabLayout() {
           name={tab.name}
           options={{
             title: tab.title,
-            tabBarIcon: ({ color, size }) => <tab.icon color={color} size={size} />,
+            tabBarIcon: ({ color, size }) => (
+              <tab.icon color={color} size={size} />
+            ),
           }}
         />
       ))}
