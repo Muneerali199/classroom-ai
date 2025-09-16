@@ -29,14 +29,6 @@ import {
   RotateCcw,
   X,
   Mic,
-  Image as ImageIcon,
-  BookOpen,
-  Palette,
-  Globe,
-  ChevronDown,
-  Wand2,
-  FileText,
-  Play,
 } from 'lucide-react-native';
 
 interface Message {
@@ -136,21 +128,7 @@ const QUICK_SUGGESTIONS = [
   "Solve this math problem",
 ];
 
-const SUPPORTED_LANGUAGES = [
-  { code: 'en-US', name: 'English (US)', flag: '🇺🇸' },
-  { code: 'en-GB', name: 'English (UK)', flag: '🇬🇧' },
-  { code: 'es-ES', name: 'Spanish', flag: '🇪🇸' },
-  { code: 'fr-FR', name: 'French', flag: '🇫🇷' },
-  { code: 'de-DE', name: 'German', flag: '🇩🇪' },
-  { code: 'it-IT', name: 'Italian', flag: '🇮🇹' },
-  { code: 'pt-BR', name: 'Portuguese', flag: '🇧🇷' },
-  { code: 'zh-CN', name: 'Chinese', flag: '🇨🇳' },
-  { code: 'ja-JP', name: 'Japanese', flag: '🇯🇵' },
-  { code: 'ko-KR', name: 'Korean', flag: '🇰🇷' },
-  { code: 'ar-SA', name: 'Arabic', flag: '🇸🇦' },
-  { code: 'hi-IN', name: 'Hindi', flag: '🇮🇳' },
-  { code: 'ru-RU', name: 'Russian', flag: '🇷🇺' },
-];
+
 
 export default function ChatbotScreen() {
   const { user } = useAuth();
@@ -169,15 +147,12 @@ export default function ChatbotScreen() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>(AI_PROVIDERS[0]);
-  const [selectedModel, setSelectedModel] = useState<string>(AI_PROVIDERS[0].models[0]);
-  const [selectedLanguage, setSelectedLanguage] = useState('en-US');
+
   const [showProviders, setShowProviders] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [showVoiceCenter, setShowVoiceCenter] = useState(false);
   const [isVoiceProcessing, setIsVoiceProcessing] = useState(false);
-  const [showAdvancedFeatures, setShowAdvancedFeatures] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isCreatingStory, setIsCreatingStory] = useState(false);
+
   
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -231,7 +206,7 @@ export default function ChatbotScreen() {
           messages: [
             {
               role: 'system',
-              content: `You are an AI assistant for ${user?.role === 'student' ? 'a student' : user?.role === 'teacher' ? 'a teacher' : 'a dean'} named ${user?.name || 'the user'} at ${user?.institution || 'their institution'}. 
+              content: `You are an AI assistant for ${user?.role === 'student' ? 'a student' : user?.role === 'teacher' ? 'a teacher' : 'an admin'} named ${user?.name || 'the user'} at ${user?.institution || 'their institution'}.
               
               Your capabilities include:
               - Academic help and tutoring
