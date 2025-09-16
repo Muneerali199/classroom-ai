@@ -403,7 +403,7 @@ export default function ProfileScreen() {
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{user.name}</Text>
               <Text style={styles.profileRole}>
-                {user.role.charAt(0).toUpperCase() + user.role.slice(1)}{user.profile?.department ? ` • ${user.profile.department}` : ''}
+                {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User'}{user.profile?.department ? ` • ${user.profile.department}` : ''}
               </Text>
               <Text style={styles.profileInstitution}>{user.institution}</Text>
             </View>
