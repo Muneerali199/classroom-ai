@@ -6,7 +6,6 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Alert,
   Platform,
   KeyboardAvoidingView,
   Animated,
@@ -16,26 +15,29 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { VoiceInterface } from '@/components/voiceinterface';
 import {
-
   Send,
-  Mic,
-  MicOff,
   Bot,
   User,
   Sparkles,
   Volume2,
-  VolumeX,
   Settings,
   Zap,
   Brain,
-
   Copy,
   RotateCcw,
   X,
+  Mic,
+  Image as ImageIcon,
+  BookOpen,
+  Palette,
+  Globe,
+  ChevronDown,
+  Wand2,
+  FileText,
+  Play,
 } from 'lucide-react-native';
-import { Audio } from 'expo-av';
-import * as Speech from 'expo-speech';
 
 interface Message {
   id: string;
@@ -54,40 +56,70 @@ interface AIProvider {
   icon: React.ComponentType<any>;
   color: [string, string];
   capabilities: string[];
+  models: string[];
+  apiEndpoint?: string;
 }
 
 const AI_PROVIDERS: AIProvider[] = [
   {
-    id: 'gpt-4',
-    name: 'GPT-4',
-    description: 'Advanced reasoning and analysis',
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    description: 'Latest multimodal AI with vision and reasoning',
+    icon: Zap,
+    color: ['#4285F4', '#1A73E8'],
+    capabilities: ['Vision', 'Reasoning', 'Creativity', 'Code Generation', 'Image Generation'],
+    models: ['gemini-2.0-flash-exp', 'gemini-2.0-flash-thinking-exp'],
+    apiEndpoint: 'gemini',
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    description: 'Advanced reasoning with long context',
+    icon: Brain,
+    color: ['#34A853', '#137333'],
+    capabilities: ['Long Context', 'Analysis', 'Complex Reasoning', 'Document Processing'],
+    models: ['gemini-1.5-pro', 'gemini-1.5-pro-002'],
+    apiEndpoint: 'gemini',
+  },
+  {
+    id: 'gpt-4o',
+    name: 'GPT-4o',
+    description: 'OpenAI\'s most advanced multimodal model',
     icon: Brain,
     color: ['#10B981', '#059669'],
-    capabilities: ['Text Generation', 'Analysis', 'Problem Solving'],
+    capabilities: ['Text Generation', 'Vision', 'Analysis', 'Problem Solving'],
+    models: ['gpt-4o', 'gpt-4o-mini'],
+    apiEndpoint: 'openai',
   },
   {
-    id: 'claude',
-    name: 'Claude',
-    description: 'Helpful, harmless, and honest',
+    id: 'claude-3.5-sonnet',
+    name: 'Claude 3.5 Sonnet',
+    description: 'Anthropic\'s most capable model',
     icon: Sparkles,
     color: ['#8B5CF6', '#7C3AED'],
-    capabilities: ['Writing', 'Research', 'Code Review'],
+    capabilities: ['Writing', 'Research', 'Code Review', 'Analysis'],
+    models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+    apiEndpoint: 'anthropic',
   },
   {
-    id: 'gemini',
-    name: 'Gemini',
-    description: 'Multimodal AI assistant',
-    icon: Zap,
-    color: ['#3B82F6', '#1D4ED8'],
-    capabilities: ['Vision', 'Reasoning', 'Creativity'],
-  },
-  {
-    id: 'llama',
-    name: 'Llama 3',
-    description: 'Open-source language model',
+    id: 'llama-3.3',
+    name: 'Llama 3.3 70B',
+    description: 'Meta\'s latest open-source model',
     icon: Bot,
     color: ['#F59E0B', '#D97706'],
-    capabilities: ['Coding', 'Math', 'Reasoning'],
+    capabilities: ['Coding', 'Math', 'Reasoning', 'Multilingual'],
+    models: ['llama-3.3-70b-instruct', 'llama-3.1-405b-instruct'],
+    apiEndpoint: 'meta',
+  },
+  {
+    id: 'mistral-large',
+    name: 'Mistral Large',
+    description: 'European AI with strong multilingual support',
+    icon: Zap,
+    color: ['#FF6B35', '#E55A2B'],
+    capabilities: ['Multilingual', 'Reasoning', 'Code Generation'],
+    models: ['mistral-large-2407', 'mistral-small-2409'],
+    apiEndpoint: 'mistral',
   },
 ];
 
@@ -98,6 +130,26 @@ const QUICK_SUGGESTIONS = [
   "Check my grammar",
   "Summarize this text",
   "Generate practice questions",
+  "Create a visual diagram",
+  "Tell me an interactive story",
+  "Design a lesson plan",
+  "Solve this math problem",
+];
+
+const SUPPORTED_LANGUAGES = [
+  { code: 'en-US', name: 'English (US)', flag: '🇺🇸' },
+  { code: 'en-GB', name: 'English (UK)', flag: '🇬🇧' },
+  { code: 'es-ES', name: 'Spanish', flag: '🇪🇸' },
+  { code: 'fr-FR', name: 'French', flag: '🇫🇷' },
+  { code: 'de-DE', name: 'German', flag: '🇩🇪' },
+  { code: 'it-IT', name: 'Italian', flag: '🇮🇹' },
+  { code: 'pt-BR', name: 'Portuguese', flag: '🇧🇷' },
+  { code: 'zh-CN', name: 'Chinese', flag: '🇨🇳' },
+  { code: 'ja-JP', name: 'Japanese', flag: '🇯🇵' },
+  { code: 'ko-KR', name: 'Korean', flag: '🇰🇷' },
+  { code: 'ar-SA', name: 'Arabic', flag: '🇸🇦' },
+  { code: 'hi-IN', name: 'Hindi', flag: '🇮🇳' },
+  { code: 'ru-RU', name: 'Russian', flag: '🇷🇺' },
 ];
 
 export default function ChatbotScreen() {
@@ -108,27 +160,29 @@ export default function ChatbotScreen() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: `Hello ${user?.name}! I'm your AI assistant. I can help you with academic questions, study tips, schedule management, and more. How can I assist you today?`,
+      text: `Hello ${user?.name || 'there'}! I'm your AI assistant. I can help you with academic questions, study tips, schedule management, and more. How can I assist you today?`,
       isUser: false,
       timestamp: new Date(),
       aiProvider: 'gpt-4',
     },
   ]);
   const [inputText, setInputText] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>(AI_PROVIDERS[0]);
+  const [selectedModel, setSelectedModel] = useState<string>(AI_PROVIDERS[0].models[0]);
+  const [selectedLanguage, setSelectedLanguage] = useState('en-US');
   const [showProviders, setShowProviders] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const [isTyping, setIsTyping] = useState(false);
+  const [showVoiceCenter, setShowVoiceCenter] = useState(false);
+  const [isVoiceProcessing, setIsVoiceProcessing] = useState(false);
+  const [showAdvancedFeatures, setShowAdvancedFeatures] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isCreatingStory, setIsCreatingStory] = useState(false);
   
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const speakTextRef = useRef<((text: string) => void) | null>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -145,112 +199,6 @@ export default function ChatbotScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  useEffect(() => {
-    if (isRecording) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.2,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    } else {
-      pulseAnim.setValue(1);
-    }
-  }, [isRecording, pulseAnim]);
-
-  const startRecording = async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please grant microphone permission to use voice input.');
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      setRecording(newRecording);
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      Alert.alert('Error', 'Failed to start recording. Please try again.');
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!recording) return;
-
-    try {
-      setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      
-      const uri = recording.getURI();
-      if (uri) {
-        await transcribeAudio(uri);
-      }
-      
-      setRecording(null);
-      
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      Alert.alert('Error', 'Failed to process recording. Please try again.');
-    }
-  };
-
-  const transcribeAudio = async (uri: string) => {
-    try {
-      setIsLoading(true);
-      
-      const formData = new FormData();
-      const uriParts = uri.split('.');
-      const fileType = uriParts[uriParts.length - 1];
-      
-      const audioFile = {
-        uri,
-        name: `recording.${fileType}`,
-        type: `audio/${fileType}`,
-      } as any;
-      
-      formData.append('audio', audioFile);
-      
-      const response = await fetch('https://toolkit.rork.com/stt/transcribe/', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error('Transcription failed');
-      }
-      
-      const result = await response.json();
-      if (result.text) {
-        setInputText(result.text);
-      }
-    } catch (error) {
-      console.error('Transcription error:', error);
-      Alert.alert('Error', 'Failed to transcribe audio. Please try typing instead.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const sendMessage = async (text?: string) => {
     const messageText = text || inputText.trim();
     if (!messageText || isLoading) return;
@@ -266,7 +214,6 @@ export default function ChatbotScreen() {
     setInputText('');
     setIsLoading(true);
     setShowSuggestions(false);
-    setIsTyping(true);
 
     try {
       // Build conversation context
@@ -284,7 +231,7 @@ export default function ChatbotScreen() {
           messages: [
             {
               role: 'system',
-              content: `You are an AI assistant for ${user?.role === 'student' ? 'a student' : user?.role === 'teacher' ? 'a teacher' : 'a dean'} named ${user?.name} at ${user?.institution}. 
+              content: `You are an AI assistant for ${user?.role === 'student' ? 'a student' : user?.role === 'teacher' ? 'a teacher' : 'a dean'} named ${user?.name || 'the user'} at ${user?.institution || 'their institution'}. 
               
               Your capabilities include:
               - Academic help and tutoring
@@ -314,7 +261,11 @@ export default function ChatbotScreen() {
       const result = await response.json();
       
       // Simulate typing delay for better UX
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => {
+        if (resolve) {
+          setTimeout(resolve, 1000);
+        }
+      });
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -325,7 +276,6 @@ export default function ChatbotScreen() {
       };
 
       setMessages(prev => [...prev, aiMessage]);
-      setConversationHistory(prev => [...prev, userMessage, aiMessage]);
     } catch (error) {
       console.error('AI response error:', error);
       const errorMessage: Message = {
@@ -338,59 +288,74 @@ export default function ChatbotScreen() {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
-      setIsTyping(false);
     }
   };
 
-  const speakMessage = async (text: string) => {
-    try {
-      if (isSpeaking) {
-        Speech.stop();
-        setIsSpeaking(false);
-        return;
-      }
-
-      setIsSpeaking(true);
-      await Speech.speak(text, {
-        language: 'en',
-        pitch: 1.0,
-        rate: 0.9,
-        onDone: () => setIsSpeaking(false),
-        onError: () => setIsSpeaking(false),
-      });
-    } catch (error) {
-      console.error('Error speaking text:', error);
-      setIsSpeaking(false);
-    }
-  };
-
-  const copyMessage = (text: string) => {
-    Alert.alert('Copied', 'Message copied to clipboard');
+  const copyMessage = () => {
+    // Copy functionality would be implemented here
+    console.log('Copy message functionality');
   };
 
   const clearChat = () => {
-    Alert.alert(
-      'Clear Chat',
-      'Are you sure you want to clear all messages?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: () => {
-            setMessages([
-              {
-                id: '1',
-                text: `Hello ${user?.name}! I'm your AI assistant. How can I help you today?`,
-                isUser: false,
-                timestamp: new Date(),
-                aiProvider: selectedProvider.id,
-              },
-            ]);
-          },
-        },
-      ]
-    );
+    setMessages([
+      {
+        id: '1',
+        text: `Hello ${user?.name || 'there'}! I'm your AI assistant. How can I help you today?`,
+        isUser: false,
+        timestamp: new Date(),
+        aiProvider: selectedProvider.id,
+      },
+    ]);
+    setShowSuggestions(true);
+  };
+
+  const handleVoiceTranscript = (transcript: string) => {
+    if (transcript?.trim()) {
+      const cleanTranscript = transcript.trim();
+      console.log('Voice transcript received:', cleanTranscript);
+      setInputText(cleanTranscript);
+      setIsVoiceProcessing(false);
+      
+      // Show a brief success feedback
+      console.log('✅ Voice transcription successful:', cleanTranscript);
+    }
+  };
+
+  const handleSpeakTextSetup = (speakFunction: (text: string) => void) => {
+    speakTextRef.current = speakFunction;
+  };
+
+  const handleListeningChange = (isListening: boolean, transcript?: string) => {
+    console.log('Listening state changed:', { isListening, transcript });
+    setIsVoiceProcessing(isListening);
+    
+    // Update input text with real-time transcript updates
+    if (transcript?.trim()) {
+      const cleanTranscript = transcript.trim();
+      setInputText(cleanTranscript);
+    }
+    
+    // Clear input when starting new recording
+    if (isListening && !transcript) {
+      setInputText('');
+    }
+  };
+
+  const handleTranscriptUpdate = (transcript: string) => {
+    console.log('Transcript update:', transcript);
+    if (transcript?.trim()) {
+      const cleanTranscript = transcript.trim();
+      setInputText(cleanTranscript);
+      
+      // Provide visual feedback that voice input is working
+      console.log('🎤 Live transcript:', cleanTranscript);
+    }
+  };
+
+  const speakMessage = (text: string) => {
+    if (text?.trim() && speakTextRef.current) {
+      speakTextRef.current(text.trim());
+    }
   };
 
   const renderMessage = (message: Message) => {
@@ -460,16 +425,12 @@ export default function ChatbotScreen() {
                   style={styles.messageAction}
                   onPress={() => speakMessage(message.text)}
                 >
-                  {isSpeaking ? (
-                    <VolumeX size={12} color={theme.colors.textSecondary} />
-                  ) : (
-                    <Volume2 size={12} color={theme.colors.textSecondary} />
-                  )}
+                  <Volume2 size={12} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
                 
                 <TouchableOpacity
                   style={styles.messageAction}
-                  onPress={() => copyMessage(message.text)}
+                  onPress={copyMessage}
                 >
                   <Copy size={12} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
@@ -507,6 +468,13 @@ export default function ChatbotScreen() {
           <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.headerButton}
+              onPress={() => setShowVoiceCenter(true)}
+            >
+              <Mic size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.headerButton}
               onPress={() => setShowProviders(!showProviders)}
             >
               <Settings size={20} color="#FFFFFF" />
@@ -521,6 +489,69 @@ export default function ChatbotScreen() {
           </View>
         </View>
       </LinearGradient>
+
+      {/* Voice Center Modal */}
+      <Modal
+        visible={showVoiceCenter}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setShowVoiceCenter(false)}
+      >
+        <View style={[styles.voiceCenterContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={[styles.voiceCenterHeader, { paddingTop: insets.top + 20 }]}>
+            <TouchableOpacity onPress={() => setShowVoiceCenter(false)}>
+              <X size={24} color={theme.colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.voiceCenterTitle, { color: theme.colors.text }]}>
+              Voice Input
+            </Text>
+            <View style={styles.spacer} />
+          </View>
+          
+          <View style={styles.voiceCenterContent}>
+            <VoiceInterface
+              mode="center"
+              theme={theme}
+              onTranscriptAction={handleVoiceTranscript}
+              onSpeakTextAction={handleSpeakTextSetup}
+              onListeningChangeAction={handleListeningChange}
+              onTranscriptUpdateAction={handleTranscriptUpdate}
+              disabled={isLoading || isVoiceProcessing}
+            />
+            
+            {inputText.trim() && (
+              <View style={styles.voiceCenterActions}>
+                <TouchableOpacity
+                  style={[styles.voiceActionButton, { backgroundColor: theme.colors.surface }]}
+                  onPress={() => {
+                    setInputText('');
+                  }}
+                >
+                  <Text style={[styles.voiceActionText, { color: theme.colors.text }]}>
+                    Clear
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.voiceActionButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    if (inputText?.trim()) {
+                      const messageToSend = inputText.trim();
+                      sendMessage(messageToSend);
+                      setInputText(''); // Clear input after sending
+                      setShowVoiceCenter(false);
+                    }
+                  }}
+                  disabled={!inputText.trim() || isLoading}
+                >
+                  <Send size={16} color="#FFFFFF" />
+                  <Text style={styles.voiceActionTextPrimary}>Send</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* AI Provider Selection Modal */}
       <Modal
@@ -612,9 +643,9 @@ export default function ChatbotScreen() {
               Quick suggestions:
             </Text>
             <View style={styles.suggestionsGrid}>
-              {QUICK_SUGGESTIONS.map((suggestion, index) => (
+              {QUICK_SUGGESTIONS.map((suggestion) => (
                 <TouchableOpacity
-                  key={index}
+                  key={suggestion}
                   style={[
                     styles.suggestionChip,
                     {
@@ -622,7 +653,11 @@ export default function ChatbotScreen() {
                       borderColor: theme.colors.border,
                     },
                   ]}
-                  onPress={() => sendMessage(suggestion)}
+                  onPress={() => {
+                    if (suggestion?.trim()) {
+                      sendMessage(suggestion.trim());
+                    }
+                  }}
                 >
                   <Text style={[styles.suggestionText, { color: theme.colors.text }]}>
                     {suggestion}
@@ -684,33 +719,23 @@ export default function ChatbotScreen() {
             ]}
             value={inputText}
             onChangeText={setInputText}
-            placeholder="Type your message..."
-            placeholderTextColor={theme.colors.textSecondary}
+            placeholder={isVoiceProcessing ? "🎤 Listening..." : "Type your message or use voice input..."}
+            placeholderTextColor={isVoiceProcessing ? theme.colors.primary : theme.colors.textSecondary}
             multiline
             maxLength={1000}
+            editable={!isVoiceProcessing}
           />
           
           <View style={styles.inputActions}>
-            <Animated.View style={[styles.pulseContainer, { transform: [{ scale: pulseAnim }] }]}>
-              <TouchableOpacity
-                style={[
-                  styles.voiceButton,
-                  {
-                    backgroundColor: isRecording 
-                      ? theme.colors.error 
-                      : theme.colors.primary + '20',
-                  },
-                ]}
-                onPress={isRecording ? stopRecording : startRecording}
-                disabled={isLoading}
-              >
-                {isRecording ? (
-                  <MicOff size={20} color={theme.colors.error} />
-                ) : (
-                  <Mic size={20} color={theme.colors.primary} />
-                )}
-              </TouchableOpacity>
-            </Animated.View>
+            <VoiceInterface
+              mode="compact"
+              theme={theme}
+              onTranscriptAction={handleVoiceTranscript}
+              onSpeakTextAction={handleSpeakTextSetup}
+              onListeningChangeAction={handleListeningChange}
+              onTranscriptUpdateAction={handleTranscriptUpdate}
+              disabled={isLoading || isVoiceProcessing}
+            />
             
             <TouchableOpacity
               style={[
@@ -770,6 +795,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 20,
     padding: 8,
+  },
+  voiceCenterContainer: {
+    flex: 1,
+  },
+  voiceCenterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  voiceCenterTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  voiceCenterContent: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  voiceCenterActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 32,
+    paddingHorizontal: 24,
+  },
+  voiceActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  voiceActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  voiceActionTextPrimary: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   modalContainer: {
     flex: 1,
@@ -947,13 +1015,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginLeft: 8,
   },
-  voiceButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sendButton: {
     width: 40,
     height: 40,
@@ -991,8 +1052,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: 'italic',
     marginTop: 4,
-  },
-  pulseContainer: {
-    // Container for pulse animation
   },
 });
