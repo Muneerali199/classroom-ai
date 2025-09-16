@@ -159,9 +159,9 @@ export default function AboutScreen() {
               colors={["rgba(139, 92, 246, 0.1)", "rgba(139, 92, 246, 0.05)"]}
               style={styles.userCard}
             >
-              <Text style={styles.welcomeText}>Welcome, {user.name}!</Text>
-              <Text style={styles.userRole}>{user.role.charAt(0).toUpperCase() + user.role.slice(1)}</Text>
-              <Text style={styles.userInstitution}>{user.institution}</Text>
+              <Text style={styles.welcomeText}>Welcome, {user?.name || 'User'}!</Text>
+              <Text style={styles.userRole}>{user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ''}</Text>
+              <Text style={styles.userInstitution}>{user?.institution || ''}</Text>
             </LinearGradient>
           </Animated.View>
         )}
