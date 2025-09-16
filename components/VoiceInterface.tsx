@@ -1,3 +1,21 @@
+/**
+ * VoiceInterface Component
+ *
+ * A comprehensive voice recording and transcription interface for the Classroom AI app.
+ * Provides real-time audio recording, speech-to-text transcription, text-to-speech,
+ * and microphone testing capabilities with multiple UI modes.
+ *
+ * Features:
+ * - Real-time audio recording with visual feedback
+ * - Speech-to-text transcription using external API
+ * - Text-to-speech with customizable rate and pitch
+ * - Microphone testing and audio level monitoring
+ * - Multiple UI modes (compact, center, expanded)
+ * - Haptic feedback and accessibility support
+ * - Error handling and recovery
+ * - Auto-stop functionality for long recordings
+ */
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -7,6 +25,7 @@ import {
   Platform,
   Animated,
   Modal,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
@@ -26,6 +45,301 @@ import {
   CheckCircle,
   Waves,
 } from 'lucide-react-native';
+
+const styles = StyleSheet.create({
+  container: {
+    // Base container
+  },
+
+  // Compact Mode Styles
+  compactContainer: {
+    padding: 12,
+  },
+  compactControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pulseContainer: {
+    // Pulse animation container
+  },
+  recordButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  controlButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statusContainer: {
+    marginTop: 8,
+    gap: 4,
+  },
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  transcriptContainer: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+  },
+  transcriptText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  confidenceText: {
+    fontSize: 10,
+    marginTop: 6,
+    textAlign: 'right',
+  },
+  transcriptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  transcriptLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+
+  // Center Mode Styles
+  centerContainer: {
+    alignItems: 'center',
+    padding: 24,
+  },
+  centerGradient: {
+    alignItems: 'center',
+    padding: 32,
+    borderRadius: 24,
+    minHeight: 200,
+    width: '100%',
+  },
+  centerPulseContainer: {
+    marginBottom: 24,
+  },
+  centerRecordButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  centerStatus: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  centerStatusTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  centerStatusSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  centerTranscript: {
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+    maxWidth: '100%',
+  },
+  centerTranscriptText: {
+    fontSize: 16,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  centerControls: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  centerControlButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 24,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  settingLeft: {
+    flex: 1,
+  },
+  settingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  settingDescription: {
+    fontSize: 14,
+  },
+  toggle: {
+    width: 44,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+  },
+  toggleThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  rateButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  rateButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  testButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  testResults: {
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  testResultsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  levelBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  levelFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  deviceInfo: {
+    fontSize: 12,
+  },
+  spacer: {
+    width: 44,
+  },
+
+  // Error Styles
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  errorDismiss: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+  },
+});
 
 interface VoiceInterfaceProps {
   onTranscriptAction: (text: string) => void;
@@ -76,8 +390,6 @@ interface MicrophoneTestState {
   error?: string;
 }
 
-
-
 export function VoiceInterface({
   onTranscriptAction,
   onSpeakTextAction,
@@ -117,12 +429,14 @@ export function VoiceInterface({
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [autoSend, setAutoSend] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const levelAnim = useRef(new Animated.Value(0)).current;
   const durationTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Animation effects
   useEffect(() => {
@@ -154,6 +468,21 @@ export function VoiceInterface({
     }).start();
   }, [fadeAnim]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingRef.current) {
+        recordingRef.current.stopAndUnloadAsync().catch(console.warn);
+      }
+      if (durationTimer.current) {
+        clearInterval(durationTimer.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   // Haptic feedback
   const triggerHaptic = useCallback((type: 'light' | 'medium' | 'heavy' = 'light') => {
     if (Platform.OS !== 'web') {
@@ -175,17 +504,57 @@ export function VoiceInterface({
     }
   }, []);
 
-  const transcribeAudio = useCallback(async (uri: string) => {
+  // Enhanced audio cleanup function
+  const cleanupAudio = useCallback(async () => {
     try {
+      if (recordingRef.current) {
+        const status = await recordingRef.current.getStatusAsync();
+        if (status.isRecording) {
+          try {
+            await recordingRef.current.stopAndUnloadAsync();
+          } catch (stopError) {
+            console.warn('Error stopping recording during cleanup:', stopError);
+          }
+        }
+        recordingRef.current = null;
+      }
+
+      // Reset audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+    } catch (error) {
+      console.warn('Audio cleanup error:', error);
+    }
+  }, []);
+
+  // Improved transcription function
+  const transcribeAudio = useCallback(async (uri: string) => {
+    if (!uri || uri.length === 0) {
+      setError('No audio recorded. Please try again.');
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
       setTranscriptionState(prev => ({ ...prev, isTranscribing: true }));
+      setError(null);
       
-      console.log('Starting transcription for URI:', uri);
+      console.log('🎙️ Starting transcription for URI:', uri);
+      
+      // Create new abort controller
+      abortControllerRef.current = new AbortController();
+      const timeoutId = setTimeout(() => {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      }, 30000);
       
       const formData = new FormData();
       const uriParts = uri.split('.');
-      const fileType = uriParts[uriParts.length - 1];
+      const fileType = uriParts[uriParts.length - 1] || 'wav';
       
-      // Ensure proper file extension mapping
       const mimeTypeMap: { [key: string]: string } = {
         'm4a': 'audio/m4a',
         'wav': 'audio/wav',
@@ -194,98 +563,68 @@ export function VoiceInterface({
         'mp4': 'audio/mp4',
       };
       
-      const mimeType = mimeTypeMap[fileType] || `audio/${fileType}`;
+      const mimeType = mimeTypeMap[fileType] || 'audio/wav';
       
-      // Validate audio file exists and has content
-      if (!uri || uri.length === 0) {
-        throw new Error('Audio file is required - recording URI is empty');
-      }
-      
-      console.log('Preparing audio file for transcription:', { uri, fileType, mimeType });
-      
-      // Configure audio file for proper upload with correct format
       const audioFile = {
         uri,
         name: `recording.${fileType}`,
         type: mimeType,
       } as any;
       
-      console.log('Audio file config:', { uri, name: audioFile.name, type: audioFile.type });
+      formData.append('audio', audioFile);
+      formData.append('language', 'en-US');
       
-      // Verify file exists before uploading
-      try {
-        // For React Native, validate the URI format
-        if (!uri.startsWith('file://') && !uri.startsWith('content://') && !uri.startsWith('blob:') && !uri.startsWith('data:')) {
-          console.warn('Unusual URI format detected:', uri);
-        }
-        
-        // Add additional metadata for better transcription
-        formData.append('audio', audioFile);
-        formData.append('language', 'en-US'); // Specify language for better accuracy
-        
-        console.log('Audio file and metadata appended to FormData successfully');
-      } catch (appendError) {
-        console.error('Error appending audio file:', appendError);
-        throw new Error('Failed to prepare audio file for upload');
-      }
-      
-      console.log('Sending transcription request...');
-      
-      // Create AbortController for timeout handling (compatible with older React Native versions)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      console.log('📤 Sending transcription request...');
       
       const response = await fetch('https://toolkit.rork.com/stt/transcribe/', {
         method: 'POST',
         body: formData,
-        // Don't set Content-Type header - let the browser handle it for FormData
-        signal: controller.signal,
+        signal: abortControllerRef.current.signal,
+        headers: {
+          'Accept': 'application/json',
+        },
       });
       
       clearTimeout(timeoutId);
       
-      console.log('Transcription response status:', response.status);
-      
       if (!response.ok) {
-        let errorText = 'Unknown error';
+        let errorMessage = 'Transcription failed';
         try {
-          errorText = await response.text();
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
         } catch {
-          errorText = `HTTP ${response.status} ${response.statusText}`;
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
-        console.error('Transcription API error:', { status: response.status, statusText: response.statusText, error: errorText });
         
-        // Handle specific error cases with more detailed messages
-        if (response.status === 400) {
-          if (errorText.includes('Audio file is required')) {
-            throw new Error('No audio data received. Please ensure you speak clearly during recording and try again.');
-          } else if (errorText.includes('format')) {
-            throw new Error('Audio format not supported. Please try recording again.');
-          } else {
-            throw new Error('Invalid audio data. Please ensure your microphone is working and try recording again.');
-          }
-        } else if (response.status === 413) {
-          throw new Error('Recording too long. Please try a shorter recording (max 60 seconds).');
-        } else if (response.status === 429) {
-          throw new Error('Too many requests. Please wait 30 seconds and try again.');
-        } else if (response.status >= 500) {
-          throw new Error('Transcription service temporarily unavailable. Please try again in a few minutes.');
-        } else {
-          throw new Error(`Transcription failed (${response.status}). Please try again.`);
+        // Handle specific error codes
+        switch (response.status) {
+          case 400:
+            errorMessage = 'Invalid audio format. Please try recording again.';
+            break;
+          case 413:
+            errorMessage = 'Recording too long. Please keep it under 60 seconds.';
+            break;
+          case 429:
+            errorMessage = 'Too many requests. Please wait and try again.';
+            break;
+          case 500:
+          case 502:
+          case 503:
+            errorMessage = 'Service temporarily unavailable. Please try again.';
+            break;
         }
+        
+        throw new Error(errorMessage);
       }
       
       const result = await response.json();
-      console.log('Transcription result:', result);
+      console.log('✅ Transcription result:', result);
       
       if (result.text && result.text.trim()) {
-        const transcript = result.text.trim();
-        
-        // Clean up the transcript - remove extra spaces, fix common transcription issues
-        const cleanedTranscript = transcript
-          .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-          .replace(/^[.,!?\s]+|[.,!?\s]+$/g, '') // Remove leading/trailing punctuation and spaces
-          .trim();
+        const cleanedTranscript = result.text
+          .trim()
+          .replace(/\s+/g, ' ')
+          .replace(/^[.,!?\s]+|[.,!?\s]+$/g, '');
         
         if (cleanedTranscript.length > 0) {
           setTranscriptionState(prev => ({
@@ -294,137 +633,264 @@ export function VoiceInterface({
             confidence: result.confidence || 0.9,
           }));
           
-          // Update the input with the cleaned transcript
           onTranscriptAction(cleanedTranscript);
           onTranscriptUpdateAction?.(cleanedTranscript);
           
-          // Show success feedback
-          console.log('✅ Transcription successful:', cleanedTranscript);
-          
-          if (autoSend && cleanedTranscript.length > 3) { // Only auto-send if meaningful content
-            // Auto-send after a short delay to allow user to see the transcript
-            setTimeout(() => {
-              console.log('🚀 Auto-sending transcript:', cleanedTranscript);
-              // The parent component should handle this via the transcript action
-            }, 1500); // Reduced delay for better UX
-          }
-          
           triggerHaptic('heavy');
           
-          // Clear transcript after showing for a moment
+          if (autoSend && cleanedTranscript.length > 3) {
+            setTimeout(() => {
+              console.log('🚀 Auto-sending transcript');
+            }, 1000);
+          }
+          
+          // Clear transcript after delay
           setTimeout(() => {
             setTranscriptionState(prev => ({
               ...prev,
               transcript: '',
               finalTranscript: '',
             }));
-          }, 4000); // Slightly reduced time
+          }, 4000);
         } else {
-          setError('Transcription result was empty. Please try speaking more clearly.');
-          triggerHaptic('medium');
+          throw new Error('Empty transcription result. Please speak more clearly.');
         }
       } else {
-        setError('No speech detected. Please speak clearly into your microphone and try again.');
-        triggerHaptic('medium');
+        throw new Error('No speech detected. Please speak clearly into the microphone.');
       }
     } catch (error: any) {
       console.error('❌ Transcription error:', error);
-      let errorMessage = 'Failed to transcribe audio. Please try again.';
       
-      if (error.name === 'AbortError' || error.message?.includes('timeout')) {
-        errorMessage = 'Transcription timed out. Please try a shorter recording.';
-      } else if (error.message?.includes('Audio file is required') || error.message?.includes('No audio data')) {
-        errorMessage = 'No audio recorded. Please hold the microphone button and speak clearly.';
-      } else if (error.message?.includes('network') || error.message?.includes('fetch') || error.message?.includes('NetworkError')) {
-        errorMessage = 'Network error. Please check your internet connection and try again.';
-      } else if (error.message?.includes('format') || error.message?.includes('codec') || error.message?.includes('not supported')) {
-        errorMessage = 'Audio format issue. Please try recording again.';
-      } else if (error.message?.includes('413') || error.message?.includes('too large') || error.message?.includes('too long')) {
-        errorMessage = 'Recording too long. Please try a shorter recording (max 60 seconds).';
-      } else if (error.message?.includes('429') || error.message?.includes('Too many requests')) {
-        errorMessage = 'Too many requests. Please wait 30 seconds and try again.';
-      } else if (error.message?.includes('400') || error.message?.includes('Invalid audio')) {
-        errorMessage = 'Audio quality issue. Please speak clearly and ensure good microphone connection.';
-      } else if (error.message?.includes('Invalid audio file URI')) {
-        errorMessage = 'Recording failed. Please check microphone permissions and try again.';
-      } else if (error.message?.includes('Failed to prepare audio')) {
-        errorMessage = 'Audio processing failed. Please try recording again.';
-      } else if (error.message?.includes('service') || error.message?.includes('server')) {
-        errorMessage = 'Transcription service unavailable. Please try again in a few minutes.';
+      if (error.name === 'AbortError') {
+        setError('Transcription timed out. Please try a shorter recording.');
+      } else if (error.message?.includes('NetworkError') || error.message?.includes('fetch')) {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError(error.message || 'Transcription failed. Please try again.');
       }
       
-      setError(errorMessage);
       triggerHaptic('heavy');
-      
-      // Auto-clear error after some time
-      setTimeout(() => {
-        setError(null);
-      }, 8000);
     } finally {
+      setIsProcessing(false);
       setTranscriptionState(prev => ({ ...prev, isTranscribing: false }));
+      abortControllerRef.current = null;
     }
   }, [onTranscriptAction, onTranscriptUpdateAction, autoSend, triggerHaptic]);
 
-  const stopRecording = useCallback(async () => {
-    if (!recordingRef.current) return;
+  // Improved recording toggle function
+  const toggleRecording = useCallback(async () => {
+    if (isProcessing) {
+      console.log('🔄 Already processing, ignoring toggle');
+      return;
+    }
 
-    try {
-      console.log('Stopping recording...');
-      
-      // First update the state to show we're stopping
-      setRecordingState(prev => ({
-        ...prev,
+    if (recordingState.isRecording) {
+      // Stop recording - Update UI state immediately
+      console.log('⏹️ Stopping recording...');
+
+      // Immediately update UI state for instant feedback
+      setRecordingState({
         isRecording: false,
         isPaused: false,
-      }));
-
-      // Stop and unload the recording
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      
-      console.log('Recording stopped, URI:', uri);
-      
-      // Clear the recording reference
-      recordingRef.current = null;
-      
-      // Reset audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
+        duration: 0,
+        audioLevel: 0,
       });
 
-      // Provide haptic feedback
-      triggerHaptic('light');
-      onListeningChangeAction?.(false);
-      
-      // Only transcribe if we have a valid URI
-      if (uri && uri.length > 0) {
-        console.log('Starting transcription for URI:', uri);
-        await transcribeAudio(uri);
-      } else {
-        console.error('No valid recording URI found');
-        setError('Recording failed - no audio data captured. Please try again.');
-      }
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      setError('Failed to process recording. Please try again.');
-      
-      // Ensure we clean up even if there's an error
-      recordingRef.current = null;
-      onListeningChangeAction?.(false);
-    }
-  }, [onListeningChangeAction, triggerHaptic, transcribeAudio]);
+      try {
+        setIsProcessing(true);
 
-  // Duration timer with auto-stop at 60 seconds
+        if (!recordingRef.current) {
+          console.warn('No active recording to stop');
+          setIsProcessing(false);
+          return;
+        }
+
+        // Get recording status first
+        const status = await recordingRef.current.getStatusAsync();
+        console.log('Recording status before stop:', status);
+
+        if (!status.isRecording) {
+          console.warn('Recording is not active');
+          setIsProcessing(false);
+          return;
+        }
+
+        // Stop the recording with timeout
+        const stopPromise = recordingRef.current.stopAndUnloadAsync();
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Stop timeout')), 5000);
+        });
+
+        try {
+          console.log('⏳ Waiting for recording to stop...');
+          await Promise.race([stopPromise, timeoutPromise]);
+          console.log('✅ Recording stopped successfully');
+          if (timeoutId !== undefined) clearTimeout(timeoutId);
+        } catch (stopError) {
+          console.warn('❌ Error stopping recording:', stopError);
+          if (timeoutId !== undefined) clearTimeout(timeoutId);
+          // Force cleanup if stop fails
+          console.log('🧹 Force cleanup after stop failure');
+          try {
+            await cleanupAudio();
+          } catch (cleanupError) {
+            console.error('❌ Force cleanup failed:', cleanupError);
+          }
+        }
+
+        const uri = recordingRef.current?.getURI();
+        console.log('📁 Recording URI:', uri);
+
+        // Clear timer
+        if (durationTimer.current) {
+          clearInterval(durationTimer.current);
+          durationTimer.current = null;
+        }
+
+        // Clean up recording reference
+        recordingRef.current = null;
+
+        // Reset audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
+
+        triggerHaptic('light');
+        onListeningChangeAction?.(false);
+
+        // Transcribe if we have a valid URI
+        if (uri && uri.length > 0) {
+          setTimeout(() => {
+            transcribeAudio(uri);
+          }, 300);
+        } else {
+          setError('No audio recorded. Please try again.');
+        }
+      } catch (error: any) {
+        console.error('❌ Failed to stop recording:', error);
+        setError('Failed to stop recording. Please try again.');
+
+        // Force cleanup
+        await cleanupAudio();
+        onListeningChangeAction?.(false);
+      } finally {
+        setIsProcessing(false);
+      }
+    } else {
+      // Start recording
+      console.log('🎤 Starting recording...');
+      
+      try {
+        setIsProcessing(true);
+        setError(null);
+        
+        // Clean up any existing recording
+        await cleanupAudio();
+        
+        // Request permissions
+        const { status } = await Audio.requestPermissionsAsync();
+        if (status !== 'granted') {
+          setError('Microphone permission required. Please enable in settings.');
+          if (Platform.OS !== 'web') {
+            Alert.alert(
+              'Microphone Permission',
+              'Please enable microphone access in your device settings to use voice recording.',
+              [{ text: 'OK' }]
+            );
+          }
+          return;
+        }
+
+        // Set audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
+
+        // Optimized recording options
+        const recordingOptions = {
+          android: {
+            extension: '.m4a',
+            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+            audioEncoder: Audio.AndroidAudioEncoder.AAC,
+            sampleRate: 44100,
+            numberOfChannels: 1,
+            bitRate: 128000,
+          },
+          ios: {
+            extension: '.wav',
+            outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+            audioQuality: Audio.IOSAudioQuality.HIGH,
+            sampleRate: 44100,
+            numberOfChannels: 1,
+            bitRate: 128000,
+            linearPCMBitDepth: 16,
+            linearPCMIsBigEndian: false,
+            linearPCMIsFloat: false,
+          },
+          web: {
+            mimeType: 'audio/webm;codecs=opus',
+            bitsPerSecond: 128000,
+          },
+        };
+
+        const { recording } = await Audio.Recording.createAsync(recordingOptions);
+        recordingRef.current = recording;
+
+        // Start recording
+        await recording.startAsync();
+
+        setRecordingState(prev => ({
+          ...prev,
+          isRecording: true,
+          isPaused: false,
+          duration: 0,
+        }));
+
+        setTranscriptionState(prev => ({
+          ...prev,
+          transcript: '',
+          finalTranscript: '',
+          confidence: 0,
+        }));
+
+        triggerHaptic('medium');
+        onListeningChangeAction?.(true);
+
+        console.log('✅ Recording started successfully');
+      } catch (error: any) {
+        console.error('❌ Failed to start recording:', error);
+        
+        let errorMessage = 'Failed to start recording. Please try again.';
+        if (error.message?.includes('permission')) {
+          errorMessage = 'Microphone permission denied. Please enable in settings.';
+        } else if (error.message?.includes('busy') || error.message?.includes('in use')) {
+          errorMessage = 'Microphone is busy. Please close other apps and try again.';
+        }
+        
+        setError(errorMessage);
+        await cleanupAudio();
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  }, [recordingState.isRecording, isProcessing, onListeningChangeAction, triggerHaptic, transcribeAudio, cleanupAudio]);
+
+  // Duration timer with auto-stop
   useEffect(() => {
-    if (recordingState.isRecording && !recordingState.isPaused) {
+    if (recordingState.isRecording && !recordingState.isPaused && !isProcessing) {
       durationTimer.current = setInterval(() => {
         setRecordingState(prev => {
           const newDuration = prev.duration + 1;
           
-          // Auto-stop recording at 60 seconds to prevent issues
+          // Auto-stop at 60 seconds
           if (newDuration >= 60) {
             console.log('⏰ Auto-stopping recording at 60 seconds');
-            setTimeout(() => stopRecording(), 100);
+            setTimeout(() => toggleRecording(), 100);
             return { ...prev, duration: 60 };
           }
           
@@ -443,119 +909,31 @@ export function VoiceInterface({
         clearInterval(durationTimer.current);
       }
     };
-  }, [recordingState.isRecording, recordingState.isPaused, stopRecording]);
+  }, [recordingState.isRecording, recordingState.isPaused, isProcessing, toggleRecording]);
 
-  const startRecording = async () => {
-    try {
-      console.log('Requesting microphone permissions...');
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Microphone permission denied. Please enable microphone access in your device settings.');
-        if (Platform.OS !== 'web') {
-          // Use native alert only on mobile platforms
-          console.log('Microphone permission denied - please enable in device settings');
-        }
-        return;
-      }
-
-      console.log('Setting audio mode...');
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      // Use optimized recording options for speech-to-text
-      const recordingOptions = {
-        android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
-          sampleRate: 44100, // Higher quality for better transcription
-          numberOfChannels: 1, // Mono for speech
-          bitRate: 128000, // Higher bitrate for better quality
-        },
-        ios: {
-          extension: '.wav',
-          outputFormat: Audio.IOSOutputFormat.LINEARPCM,
-          audioQuality: Audio.IOSAudioQuality.HIGH,
-          sampleRate: 44100, // Higher quality for better transcription
-          numberOfChannels: 1, // Mono for speech
-          bitRate: 128000, // Higher bitrate for better quality
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        web: {
-          mimeType: 'audio/webm;codecs=opus',
-          bitsPerSecond: 128000, // Higher bitrate for better quality
-        },
-      };
-
-      console.log('Creating recording...');
-      const { recording } = await Audio.Recording.createAsync(recordingOptions);
-      recordingRef.current = recording;
-
-      setRecordingState(prev => ({
-        ...prev,
-        isRecording: true,
-        isPaused: false,
-        duration: 0,
-      }));
-
-      setError(null);
-      setTranscriptionState(prev => ({
-        ...prev,
-        transcript: '',
-        finalTranscript: '',
-        confidence: 0,
-      }));
-      
-      triggerHaptic('medium');
-      onListeningChangeAction?.(true);
-
-      console.log('Recording started successfully');
-    } catch (error: any) {
-      console.error('Failed to start recording:', error);
-      let errorMessage = 'Failed to start recording. Please try again.';
-      
-      if (error.message?.includes('permission') || error.message?.includes('denied')) {
-        errorMessage = 'Microphone permission denied. Please enable microphone access in your device settings.';
-      } else if (error.message?.includes('busy') || error.message?.includes('in use')) {
-        errorMessage = 'Microphone is busy. Please close other apps using the microphone and try again.';
-      } else if (error.message?.includes('not found') || error.message?.includes('unavailable')) {
-        errorMessage = 'No microphone found. Please connect a microphone and try again.';
-      }
-      
-      setError(errorMessage);
-      if (Platform.OS !== 'web') {
-        console.log('Recording error:', errorMessage);
-      }
-    }
-  };
-
-  // stopRecording is now defined above with useCallback
-
-  const pauseRecording = async () => {
-    if (!recordingRef.current || !recordingState.isRecording) return;
+  // Pause recording function
+  const pauseRecording = useCallback(async () => {
+    if (!recordingRef.current || !recordingState.isRecording || isProcessing) return;
 
     try {
       if (recordingState.isPaused) {
         await recordingRef.current.startAsync();
         setRecordingState(prev => ({ ...prev, isPaused: false }));
         triggerHaptic('light');
+        console.log('▶️ Recording resumed');
       } else {
         await recordingRef.current.pauseAsync();
         setRecordingState(prev => ({ ...prev, isPaused: true }));
         triggerHaptic('light');
+        console.log('⏸️ Recording paused');
       }
     } catch (error) {
       console.error('Failed to pause/resume recording:', error);
       setError('Failed to pause recording.');
     }
-  };
+  }, [recordingState.isRecording, recordingState.isPaused, isProcessing, triggerHaptic]);
 
-  // transcribeAudio is now defined above with useCallback
-
+  // Text-to-speech function
   const speakText = useCallback(async (text: string) => {
     try {
       if (speechState.isSpeaking) {
@@ -593,10 +971,10 @@ export function VoiceInterface({
     }
   }, [speechState.isSpeaking, speechState.pitch, speechState.rate]);
 
-  const stopSpeaking = () => {
+  const stopSpeaking = useCallback(() => {
     Speech.stop();
     setSpeechState(prev => ({ ...prev, isSpeaking: false, currentText: '' }));
-  };
+  }, []);
 
   const testMicrophone = async () => {
     if (microphoneTest.testing) {
@@ -612,7 +990,6 @@ export function VoiceInterface({
         throw new Error('Microphone permission denied');
       }
 
-      // Get device info
       const deviceInfo = Platform.select({
         ios: 'iOS Microphone',
         android: 'Android Microphone',
@@ -621,7 +998,7 @@ export function VoiceInterface({
 
       setMicrophoneTest(prev => ({ ...prev, deviceInfo }));
 
-      // Simulate audio level monitoring (simplified for React Native)
+      // Simulate audio level monitoring
       const levelInterval = setInterval(() => {
         const randomLevel = Math.random() * 100;
         setMicrophoneTest(prev => ({ ...prev, level: randomLevel }));
@@ -633,7 +1010,6 @@ export function VoiceInterface({
         }).start();
       }, 200);
 
-      // Auto-stop test after 10 seconds
       setTimeout(() => {
         clearInterval(levelInterval);
         setMicrophoneTest(prev => ({ ...prev, testing: false }));
@@ -641,13 +1017,9 @@ export function VoiceInterface({
 
     } catch (error: any) {
       console.error('Microphone test failed:', error);
-      let errorMessage = 'Microphone test failed';
-      
-      if (error.message?.includes('permission')) {
-        errorMessage = 'Microphone permission denied. Please allow microphone access.';
-      } else if (error.message?.includes('not found')) {
-        errorMessage = 'No microphone found. Please connect a microphone.';
-      }
+      const errorMessage = error.message?.includes('permission') 
+        ? 'Microphone permission denied. Please allow microphone access.'
+        : 'Microphone test failed. Please check your microphone connection.';
 
       setMicrophoneTest(prev => ({ 
         ...prev, 
@@ -657,9 +1029,9 @@ export function VoiceInterface({
     }
   };
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     setError(null);
-  };
+  }, []);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -683,18 +1055,19 @@ export function VoiceInterface({
             style={[
               styles.recordButton,
               {
-                backgroundColor: recordingState.isRecording 
-                  ? theme.colors.error 
+                backgroundColor: recordingState.isRecording
+                  ? theme.colors.error
                   : theme.colors.primary + '20',
                 borderWidth: recordingState.isRecording ? 2 : 0,
                 borderColor: recordingState.isRecording ? theme.colors.error : 'transparent',
+                opacity: disabled || isProcessing ? 0.5 : 1,
               },
             ]}
-            onPress={recordingState.isRecording ? stopRecording : startRecording}
-            disabled={disabled || transcriptionState.isTranscribing}
+            onPress={toggleRecording}
+            disabled={disabled || isProcessing}
             activeOpacity={0.7}
           >
-            {transcriptionState.isTranscribing ? (
+            {transcriptionState.isTranscribing || isProcessing ? (
               <Loader2 size={20} color={theme.colors.primary} />
             ) : recordingState.isRecording ? (
               <MicOff size={20} color={theme.colors.error} />
@@ -712,11 +1085,12 @@ export function VoiceInterface({
               { 
                 backgroundColor: recordingState.isPaused 
                   ? theme.colors.success + '20' 
-                  : theme.colors.surface 
+                  : theme.colors.surface,
+                opacity: isProcessing ? 0.5 : 1,
               }
             ]}
             onPress={pauseRecording}
-            disabled={disabled}
+            disabled={disabled || isProcessing}
             activeOpacity={0.7}
           >
             {recordingState.isPaused ? (
@@ -781,7 +1155,7 @@ export function VoiceInterface({
           </Animated.View>
         )}
 
-        {transcriptionState.isTranscribing && (
+        {(transcriptionState.isTranscribing || isProcessing) && (
           <View style={styles.statusItem}>
             <Loader2 size={12} color={theme.colors.primary} />
             <Text style={[styles.statusText, { color: theme.colors.text }]}>
@@ -852,15 +1226,18 @@ export function VoiceInterface({
             style={[
               styles.centerRecordButton,
               {
-                backgroundColor: recordingState.isRecording 
-                  ? theme.colors.error 
+                backgroundColor: recordingState.isRecording
+                  ? theme.colors.error
                   : theme.colors.primary,
+                opacity: disabled || isProcessing ? 0.5 : 1,
               },
             ]}
-            onPress={recordingState.isRecording ? stopRecording : startRecording}
-            disabled={disabled || transcriptionState.isTranscribing}
+            onPress={toggleRecording}
+            disabled={disabled || isProcessing}
           >
-            {recordingState.isRecording ? (
+            {isProcessing || transcriptionState.isTranscribing ? (
+              <Loader2 size={32} color="#FFFFFF" />
+            ) : recordingState.isRecording ? (
               <MicOff size={32} color="#FFFFFF" />
             ) : (
               <Mic size={32} color="#FFFFFF" />
@@ -871,14 +1248,16 @@ export function VoiceInterface({
         {/* Status Text */}
         <View style={styles.centerStatus}>
           <Text style={[styles.centerStatusTitle, { color: theme.colors.text }]}>
-            {recordingState.isRecording 
-              ? (recordingState.isPaused ? 'Recording Paused' : 'Listening...') 
-              : 'Tap to Speak'}
+            {isProcessing 
+              ? 'Processing...'
+              : recordingState.isRecording 
+                ? (recordingState.isPaused ? 'Recording Paused' : 'Listening...') 
+                : 'Tap to Speak'}
           </Text>
           <Text style={[styles.centerStatusSubtitle, { color: theme.colors.textSecondary }]}>
             {recordingState.isRecording 
               ? `${formatDuration(recordingState.duration)} - Speak clearly and naturally`
-              : 'Hold and speak your message'}
+              : 'Press and hold to record your message'}
           </Text>
         </View>
 
@@ -895,8 +1274,15 @@ export function VoiceInterface({
         {recordingState.isRecording && (
           <View style={styles.centerControls}>
             <TouchableOpacity
-              style={[styles.centerControlButton, { backgroundColor: theme.colors.surface }]}
+              style={[
+                styles.centerControlButton, 
+                { 
+                  backgroundColor: theme.colors.surface,
+                  opacity: isProcessing ? 0.5 : 1,
+                }
+              ]}
               onPress={pauseRecording}
+              disabled={isProcessing}
             >
               {recordingState.isPaused ? (
                 <Play size={20} color={theme.colors.primary} />
@@ -1077,284 +1463,3 @@ export function VoiceInterface({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    // Base container
-  },
-  
-  // Compact Mode Styles
-  compactContainer: {
-    padding: 12,
-  },
-  compactControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  pulseContainer: {
-    // Pulse animation container
-  },
-  recordButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusContainer: {
-    marginTop: 8,
-    gap: 4,
-  },
-  statusItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  transcriptContainer: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 12,
-  },
-  transcriptText: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontStyle: 'italic',
-  },
-  confidenceText: {
-    fontSize: 10,
-    marginTop: 6,
-    textAlign: 'right',
-  },
-
-  // Center Mode Styles
-  centerContainer: {
-    alignItems: 'center',
-    padding: 24,
-  },
-  centerGradient: {
-    alignItems: 'center',
-    padding: 32,
-    borderRadius: 24,
-    minHeight: 200,
-  },
-  centerPulseContainer: {
-    marginBottom: 24,
-  },
-  centerRecordButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  centerStatus: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  centerStatusTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  centerStatusSubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  centerTranscript: {
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 16,
-    maxWidth: '100%',
-  },
-  centerTranscriptText: {
-    fontSize: 16,
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  centerControls: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  centerControlButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Modal Styles
-  modalContainer: {
-    flex: 1,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  modalCloseText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  modalContent: {
-    flex: 1,
-    padding: 24,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  settingLeft: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  settingDescription: {
-    fontSize: 14,
-  },
-  toggle: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-  },
-  toggleThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  rateButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  rateButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rateButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  testButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  testButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  testResults: {
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  testResultsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  levelBar: {
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  levelFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  deviceInfo: {
-    fontSize: 12,
-  },
-  spacer: {
-    width: 44,
-  },
-  
-  // Enhanced Transcript Styles
-  transcriptHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  transcriptLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-
-  // Error Styles
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    borderRadius: 8,
-  },
-  errorBannerText: {
-    flex: 1,
-    fontSize: 14,
-  },
-  errorDismiss: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 14,
-  },
-});
