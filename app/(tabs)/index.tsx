@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Shield, Users, Zap, BookOpen, Bell, TrendingUp, CheckCircle } from "lucide-react-native";
+import { Bell, TrendingUp, CheckCircle } from "lucide-react-native";
 import { router } from "expo-router";
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -30,6 +30,14 @@ export default function HomeScreen() {
   const slideAnim = useRef(new Animated.Value(50)).current;
   const floatingAnim1 = useRef(new Animated.Value(0)).current;
   const floatingAnim2 = useRef(new Animated.Value(0)).current;
+
+  // Responsive helpers
+  const isSmallScreen = width < 400;
+  const isTablet = width > 600;
+  const scaleFont = (size: number) => Math.round(size * (width / 375));
+  const scaleSize = (size: number) => Math.round(size * (width / 375));
+  const responsivePadding = isSmallScreen ? 12 : isTablet ? 32 : 24;
+  const responsiveMargin = isSmallScreen ? 12 : isTablet ? 24 : 16;
 
   useEffect(() => {
     Animated.parallel([
@@ -98,7 +106,7 @@ export default function HomeScreen() {
           greeting: `Good day, Professor ${user.name}!`,
           subtitle: 'Manage your classes and track student progress',
         };
-      case 'dean':
+      case 'admin':
         return {
           stats: deanStats,
           quickActions: deanQuickActions,
@@ -135,13 +143,13 @@ export default function HomeScreen() {
       <Animated.View
         style={[
           styles.floatingElement1,
-          { transform: [{ translateY: floatingAnim1 }] },
+          { transform: [{ translateY: floatingAnim1 }], width: scaleSize(80), height: scaleSize(80), borderRadius: scaleSize(40), top: scaleSize(100), left: scaleSize(30) },
         ]}
       />
       <Animated.View
         style={[
           styles.floatingElement2,
-          { transform: [{ translateY: floatingAnim2 }] },
+          { transform: [{ translateY: floatingAnim2 }], width: scaleSize(60), height: scaleSize(60), borderRadius: scaleSize(30), top: scaleSize(200), right: scaleSize(40) },
         ]}
       />
 
@@ -156,17 +164,23 @@ export default function HomeScreen() {
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
+              paddingHorizontal: responsivePadding,
+              paddingTop: isSmallScreen ? 20 : 40,
+              paddingBottom: isSmallScreen ? 20 : 30,
             },
           ]}
         >
           <View style={styles.greetingContainer}>
-            <Text style={styles.greetingIcon}>{getGreetingIcon()}</Text>
+            <Text style={[styles.greetingIcon, { fontSize: scaleFont(32), marginRight: responsiveMargin }]}>{getGreetingIcon()}</Text>
             <View style={styles.greetingText}>
-              <Text style={styles.greeting}>{dashboardData.greeting}</Text>
-              <Text style={styles.subtitle}>{dashboardData.subtitle}</Text>
+              <Text style={[styles.greeting, { fontSize: scaleFont(24) }]}>{dashboardData.greeting}</Text>
+              <Text style={[styles.subtitle, { fontSize: scaleFont(14), lineHeight: scaleFont(20) }]}>{dashboardData.subtitle}</Text>
             </View>
-            <TouchableOpacity style={styles.notificationButton}>
-              <Bell color="#8B5CF6" size={24} />
+            <TouchableOpacity
+              style={styles.notificationButton}
+              onPress={() => router.push('/notifications')}
+            >
+              <Bell color="#8B5CF6" size={scaleSize(24)} />
               <View style={styles.notificationBadge}>
                 <Text style={styles.notificationBadgeText}>3</Text>
               </View>
@@ -180,6 +194,8 @@ export default function HomeScreen() {
             {
               opacity: fadeAnim,
               transform: [{ translateY: slideAnim }],
+              paddingHorizontal: responsivePadding,
+              marginBottom: responsiveMargin * 2,
             },
           ]}
         >
@@ -199,6 +215,8 @@ export default function HomeScreen() {
                         }),
                       },
                     ],
+                    width: isTablet ? "48%" : "100%",
+                    marginBottom: responsiveMargin,
                   },
                 ]}
               >
@@ -207,13 +225,13 @@ export default function HomeScreen() {
                   style={styles.statGradient}
                 >
                   <View style={styles.statHeader}>
-                    <Text style={styles.statIcon}>{stat.icon}</Text>
+                    <Text style={[styles.statIcon, { fontSize: scaleFont(24) }]}>{stat.icon}</Text>
                     <View style={styles.statTrend}>
-                      <TrendingUp color="#10B981" size={12} />
+                      <TrendingUp color="#10B981" size={scaleSize(12)} />
                     </View>
                   </View>
-                  <Text style={styles.statValue}>{stat.value}</Text>
-                  <Text style={styles.statLabel}>{stat.label}</Text>
+                  <Text style={[styles.statValue, { fontSize: scaleFont(24) }]}>{stat.value}</Text>
+                  <Text style={[styles.statLabel, { fontSize: scaleFont(12) }]}>{stat.label}</Text>
                 </LinearGradient>
               </Animated.View>
             ))}
@@ -225,10 +243,11 @@ export default function HomeScreen() {
             styles.actionsContainer,
             {
               opacity: fadeAnim,
+              paddingHorizontal: responsivePadding,
             },
           ]}
         >
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={[styles.sectionTitle, { fontSize: scaleFont(24), marginBottom: responsiveMargin }]}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
             {dashboardData.quickActions.map((action) => (
               <Animated.View
@@ -242,6 +261,8 @@ export default function HomeScreen() {
                         translateY: slideAnim,
                       },
                     ],
+                    width: isTablet ? "48%" : "100%",
+                    marginBottom: responsiveMargin,
                   },
                 ]}
               >
@@ -253,9 +274,9 @@ export default function HomeScreen() {
                     colors={action.color}
                     style={styles.actionGradient}
                   >
-                    <Text style={styles.actionIcon}>{action.icon}</Text>
-                    <Text style={styles.actionTitle}>{action.title}</Text>
-                    <Text style={styles.actionDescription}>
+                    <Text style={[styles.actionIcon, { fontSize: scaleFont(28) }]}>{action.icon}</Text>
+                    <Text style={[styles.actionTitle, { fontSize: scaleFont(16) }]}>{action.title}</Text>
+                    <Text style={[styles.actionDescription, { fontSize: scaleFont(11), lineHeight: scaleFont(14) }]}>
                       {action.description}
                     </Text>
                   </LinearGradient>
@@ -271,10 +292,12 @@ export default function HomeScreen() {
             styles.recentActivitySection,
             {
               opacity: fadeAnim,
+              paddingHorizontal: responsivePadding,
+              marginTop: responsiveMargin,
             },
           ]}
         >
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
+          <Text style={[styles.sectionTitle, { fontSize: scaleFont(24), marginBottom: responsiveMargin }]}>Recent Activity</Text>
           <View style={styles.activityList}>
             {recentActivities.map((activity, index) => (
               <Animated.View
@@ -284,6 +307,7 @@ export default function HomeScreen() {
                   {
                     opacity: fadeAnim,
                     transform: [{ translateX: slideAnim }],
+                    marginBottom: responsiveMargin,
                   },
                 ]}
               >
@@ -291,15 +315,15 @@ export default function HomeScreen() {
                   colors={["rgba(255,255,255,0.9)", "rgba(255,255,255,0.6)"]}
                   style={styles.activityCard}
                 >
-                  <View style={styles.activityIcon}>
-                    <CheckCircle color="#10B981" size={20} />
+                  <View style={[styles.activityIcon, { width: scaleSize(40), height: scaleSize(40), borderRadius: scaleSize(20), marginRight: responsiveMargin }]}>
+                    <CheckCircle color="#10B981" size={scaleSize(20)} />
                   </View>
                   <View style={styles.activityContent}>
-                    <Text style={styles.activityTitle}>{activity.title}</Text>
-                    <Text style={styles.activityDescription}>
+                    <Text style={[styles.activityTitle, { fontSize: scaleFont(14) }]}>{activity.title}</Text>
+                    <Text style={[styles.activityDescription, { fontSize: scaleFont(12) }]}>
                       {activity.description}
                     </Text>
-                    <Text style={styles.activityTime}>{activity.time}</Text>
+                    <Text style={[styles.activityTime, { fontSize: scaleFont(11) }]}>{activity.time}</Text>
                   </View>
                 </LinearGradient>
               </Animated.View>
@@ -323,28 +347,15 @@ const styles = StyleSheet.create({
   },
   floatingElement1: {
     position: "absolute",
-    top: 100,
-    left: 30,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
     backgroundColor: "rgba(59, 130, 246, 0.1)",
     zIndex: 0,
   },
   floatingElement2: {
     position: "absolute",
-    top: 200,
-    right: 40,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
     backgroundColor: "rgba(236, 72, 153, 0.1)",
     zIndex: 0,
   },
   heroSection: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 30,
   },
   greetingContainer: {
     flexDirection: 'row',
@@ -352,22 +363,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   greetingIcon: {
-    fontSize: 32,
-    marginRight: 12,
   },
   greetingText: {
     flex: 1,
   },
   greeting: {
-    fontSize: 24,
     fontWeight: "bold",
     color: "#1F2937",
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
     color: "#6B7280",
-    lineHeight: 20,
   },
   notificationButton: {
     position: 'relative',
@@ -392,8 +398,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   statsContainer: {
-    paddingHorizontal: 24,
-    marginBottom: 40,
   },
   statsGrid: {
     flexDirection: "row",
@@ -401,8 +405,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   statCard: {
-    width: "48%",
-    marginBottom: 16,
   },
   statGradient: {
     borderRadius: 16,
@@ -420,7 +422,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   statIcon: {
-    fontSize: 24,
   },
   statTrend: {
     width: 24,
@@ -431,24 +432,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statValue: {
-    fontSize: 24,
     fontWeight: "bold",
     color: "#1F2937",
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
     color: "#6B7280",
     fontWeight: "600",
   },
   actionsContainer: {
-    paddingHorizontal: 24,
   },
   sectionTitle: {
-    fontSize: 24,
     fontWeight: "bold",
     color: "#1F2937",
-    marginBottom: 20,
     textAlign: "center",
   },
   actionsGrid: {
@@ -457,8 +453,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   actionCard: {
-    width: "48%",
-    marginBottom: 16,
   },
   actionButton: {
     borderRadius: 16,
@@ -471,32 +465,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   actionIcon: {
-    fontSize: 28,
     marginBottom: 8,
   },
   actionTitle: {
-    fontSize: 16,
     fontWeight: "bold",
     color: "white",
     marginBottom: 4,
     textAlign: "center",
   },
   actionDescription: {
-    fontSize: 11,
     color: "rgba(255, 255, 255, 0.9)",
     textAlign: "center",
-    lineHeight: 14,
     flex: 1,
   },
   recentActivitySection: {
-    paddingHorizontal: 24,
-    marginTop: 20,
   },
   activityList: {
     gap: 12,
   },
   activityItem: {
-    marginBottom: 12,
   },
   activityCard: {
     flexDirection: 'row',
@@ -510,30 +497,23 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   activityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     backgroundColor: 'rgba(16, 185, 129, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
   activityContent: {
     flex: 1,
   },
   activityTitle: {
-    fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
     marginBottom: 2,
   },
   activityDescription: {
-    fontSize: 12,
     color: '#6B7280',
     marginBottom: 4,
   },
   activityTime: {
-    fontSize: 11,
     color: '#9CA3AF',
   },
 });
