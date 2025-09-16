@@ -32,7 +32,9 @@
             "router": {},
             "eas": {
                 "projectId": "5b4a5b6f-0e2d-481c-8765-d97cbbcd3fcc"
-            }
+            },
+            "EXPO_PUBLIC_SUPABASE_URL": "https://sftdildfcrrbyvmoxpcg.supabase.co",
+            "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmdGRpbGRmY3JyYnl2bW94cGNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc3OTQ0NzksImV4cCI6MjA3MzM3MDQ3OX0.c71wYiSy24ddH1pTgp1rln5kFMwTM488sMOqMJnIsbg"
         },
         "splash": {
             "image": "./assets/images/splash.png",
