@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, createContext, useContext, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import createContextHook from '@nkzw/create-context-hook';
 
 export interface User {
   id: string;
@@ -13,6 +12,7 @@ export interface User {
   dateOfBirth?: string;
   address?: string;
   emergencyContact?: string;
+  hasCompletedOnboarding?: boolean;
   profile?: {
     role: 'student' | 'teacher' | 'dean';
     department?: string;
@@ -22,6 +22,17 @@ export interface User {
     semester?: string;
     specialization?: string;
   };
+}
+
+interface AuthContextType {
+  user: User | null;
+  login: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  updateUser: (updatedUser: User) => Promise<boolean>;
+  isLoading: boolean;
+  setStoredUser: (user: User | null) => Promise<void>;
+  getStoredUser: () => Promise<User | null>;
+  completeOnboarding: () => Promise<void>;
 }
 
 // Mock users for demonstration
@@ -37,6 +48,7 @@ const mockUsers: User[] = [
     dateOfBirth: '2002-05-15',
     address: '123 Student Ave, Campus City, ST 12345',
     emergencyContact: '+1 (555) 987-6543',
+    hasCompletedOnboarding: false,
     profile: {
       role: 'student',
       department: 'Computer Science',
@@ -57,6 +69,7 @@ const mockUsers: User[] = [
     dateOfBirth: '1985-08-22',
     address: '456 Faculty St, Campus City, ST 12345',
     emergencyContact: '+1 (555) 876-5432',
+    hasCompletedOnboarding: false,
     profile: {
       role: 'teacher',
       department: 'Mathematics',
@@ -75,6 +88,7 @@ const mockUsers: User[] = [
     dateOfBirth: '1975-12-10',
     address: '789 Admin Blvd, Campus City, ST 12345',
     emergencyContact: '+1 (555) 765-4321',
+    hasCompletedOnboarding: false,
     profile: {
       role: 'dean',
       department: 'Engineering',
@@ -89,13 +103,14 @@ const STORAGE_KEY = 'user';
 
 const setStoredUser = async (user: User | null): Promise<void> => {
   try {
-    if (user && user.id && user.name && user.email) {
+    if (user) {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     } else {
       await AsyncStorage.removeItem(STORAGE_KEY);
     }
   } catch (error) {
     console.error('Error storing user:', error);
+    throw new Error('Failed to store user data');
   }
 };
 
@@ -109,12 +124,20 @@ const getStoredUser = async (): Promise<User | null> => {
   }
 };
 
-export const [AuthProvider, useAuth] = createContextHook(() => {
+// Create Auth Context
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadStoredUser = async () => {
     try {
+      setIsLoading(true);
       const storedUser = await getStoredUser();
       if (storedUser) {
         setUser(storedUser);
@@ -132,46 +155,75 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     if (!email?.trim() || !password?.trim()) {
-      return false;
+      throw new Error('Email and password are required');
     }
 
     try {
+      setIsLoading(true);
       const foundUser = mockUsers.find(u => u.email === email.trim());
       
       if (foundUser && password === 'password') {
-        setUser(foundUser);
-        await setStoredUser(foundUser);
+        const userWithOnboarding = { ...foundUser, hasCompletedOnboarding: false };
+        setUser(userWithOnboarding);
+        await setStoredUser(userWithOnboarding);
         return true;
       }
       
       return false;
     } catch (error) {
       console.error('Login error:', error);
-      return false;
+      throw new Error('Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const logout = async () => {
     try {
+      setIsLoading(true);
       setUser(null);
       await setStoredUser(null);
     } catch (error) {
       console.error('Logout error:', error);
+      throw new Error('Logout failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const updateUser = async (updatedUser: User): Promise<boolean> => {
     try {
+      setIsLoading(true);
       setUser(updatedUser);
       await setStoredUser(updatedUser);
       return true;
     } catch (error) {
       console.error('Update user error:', error);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const contextValue = useMemo(() => ({
+  const completeOnboarding = async (): Promise<void> => {
+    try {
+      if (!user) {
+        throw new Error('No user logged in');
+      }
+
+      setIsLoading(true);
+      const updatedUser = { ...user, hasCompletedOnboarding: true };
+      setUser(updatedUser);
+      await setStoredUser(updatedUser);
+    } catch (error) {
+      console.error('Complete onboarding error:', error);
+      throw new Error('Failed to complete onboarding');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const contextValue: AuthContextType = useMemo(() => ({
     user,
     login,
     logout,
@@ -179,7 +231,20 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     isLoading,
     setStoredUser,
     getStoredUser,
+    completeOnboarding,
   }), [user, isLoading]);
 
-  return contextValue;
-});
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
