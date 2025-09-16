@@ -1,168 +1,185 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
-import { useRouter } from 'expo-router';
+import createContextHook from '@nkzw/create-context-hook';
 
-interface User {
+export interface User {
   id: string;
-  email: string;
   name: string;
+  email: string;
   role: 'student' | 'teacher' | 'dean';
   institution: string;
+  avatar?: string;
+  phone?: string;
+  dateOfBirth?: string;
+  address?: string;
+  emergencyContact?: string;
+  profile?: {
+    role: 'student' | 'teacher' | 'dean';
+    department?: string;
+    studentId?: string;
+    employeeId?: string;
+    year?: string;
+    semester?: string;
+    specialization?: string;
+  };
 }
 
-interface AuthContextType {
-  user: User | null;
-  isLoading: boolean;
-  isOnboarded: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (userData: RegisterData) => Promise<void>;
-  logout: () => Promise<void>;
-  completeOnboarding: () => Promise<void>;
-}
+// Mock users for demonstration
+const mockUsers: User[] = [
+  {
+    id: '1',
+    name: 'John Smith',
+    email: 'student@university.edu',
+    role: 'student',
+    institution: 'University of Technology',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+    phone: '+1 (555) 123-4567',
+    dateOfBirth: '2002-05-15',
+    address: '123 Student Ave, Campus City, ST 12345',
+    emergencyContact: '+1 (555) 987-6543',
+    profile: {
+      role: 'student',
+      department: 'Computer Science',
+      studentId: 'CS2024001',
+      year: '3rd Year',
+      semester: 'Fall 2024',
+      specialization: 'Software Engineering',
+    },
+  },
+  {
+    id: '2',
+    name: 'Dr. Sarah Johnson',
+    email: 'teacher@university.edu',
+    role: 'teacher',
+    institution: 'University of Technology',
+    avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
+    phone: '+1 (555) 234-5678',
+    dateOfBirth: '1985-08-22',
+    address: '456 Faculty St, Campus City, ST 12345',
+    emergencyContact: '+1 (555) 876-5432',
+    profile: {
+      role: 'teacher',
+      department: 'Mathematics',
+      employeeId: 'MATH001',
+      specialization: 'Applied Mathematics',
+    },
+  },
+  {
+    id: '3',
+    name: 'Prof. Michael Davis',
+    email: 'dean@university.edu',
+    role: 'dean',
+    institution: 'University of Technology',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    phone: '+1 (555) 345-6789',
+    dateOfBirth: '1975-12-10',
+    address: '789 Admin Blvd, Campus City, ST 12345',
+    emergencyContact: '+1 (555) 765-4321',
+    profile: {
+      role: 'dean',
+      department: 'Engineering',
+      employeeId: 'DEAN001',
+      specialization: 'Academic Administration',
+    },
+  },
+];
 
-interface RegisterData {
-  email: string;
-  password: string;
-  name: string;
-  role: 'student' | 'teacher' | 'dean';
-  institution: string;
-}
+// Storage utilities
+const STORAGE_KEY = 'user';
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const setStoredUser = async (user: User | null): Promise<void> => {
+  try {
+    if (user && user.id && user.name && user.email) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    } else {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+  } catch (error) {
+    console.error('Error storing user:', error);
+  }
+};
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+const getStoredUser = async (): Promise<User | null> => {
+  try {
+    const storedUser = await AsyncStorage.getItem(STORAGE_KEY);
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.error('Error loading stored user:', error);
+    return null;
+  }
+};
+
+export const [AuthProvider, useAuth] = createContextHook(() => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isOnboarded, setIsOnboarded] = useState(false);
-  const router = useRouter();
+
+  const loadStoredUser = async () => {
+    try {
+      const storedUser = await getStoredUser();
+      if (storedUser) {
+        setUser(storedUser);
+      }
+    } catch (error) {
+      console.error('Error loading stored user:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    checkAuthState();
+    loadStoredUser();
   }, []);
 
-  const checkAuthState = async () => {
-    try {
-      const [storedUser, onboardingStatus] = await Promise.all([
-        AsyncStorage.getItem('user'),
-        AsyncStorage.getItem('onboarded')
-      ]);
-      
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-      
-      setIsOnboarded(onboardingStatus === 'true');
-      
-      // Navigate based on auth state
-      if (!onboardingStatus) {
-        router.replace('/Onboarding' as any);
-      } else if (!storedUser) {
-        router.replace('/Auth' as any);
-      } else {
-        router.replace('/(tabs)' as any);
-      }
-    } catch (error) {
-      console.error('Error checking auth state:', error);
-    } finally {
-      setIsLoading(false);
+  const login = async (email: string, password: string): Promise<boolean> => {
+    if (!email?.trim() || !password?.trim()) {
+      return false;
     }
-  };
 
-  const login = async (email: string, password: string) => {
     try {
-      setIsLoading(true);
+      const foundUser = mockUsers.find(u => u.email === email.trim());
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (foundUser && password === 'password') {
+        setUser(foundUser);
+        await setStoredUser(foundUser);
+        return true;
+      }
       
-      // Mock user data - in real app, this would come from your API
-      const userData: User = {
-        id: '1',
-        email,
-        name: email.split('@')[0],
-        role: 'student',
-        institution: 'Demo University'
-      };
-      
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-      setUser(userData);
-      
-      router.replace('/(tabs)' as any);
+      return false;
     } catch (error) {
       console.error('Login error:', error);
-      throw new Error('Invalid credentials');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const register = async (userData: RegisterData) => {
-    try {
-      setIsLoading(true);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const user: User = {
-        id: Date.now().toString(),
-        email: userData.email,
-        name: userData.name,
-        role: userData.role,
-        institution: userData.institution
-      };
-      
-      await AsyncStorage.setItem('user', JSON.stringify(user));
-      setUser(user);
-      
-      router.replace('/(tabs)' as any);
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw new Error('Registration failed');
-    } finally {
-      setIsLoading(false);
+      return false;
     }
   };
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('user');
       setUser(null);
-      router.replace('/Auth' as any);
+      await setStoredUser(null);
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
 
-  const completeOnboarding = async () => {
+  const updateUser = async (updatedUser: User): Promise<boolean> => {
     try {
-      await AsyncStorage.setItem('onboarded', 'true');
-      setIsOnboarded(true);
-      router.replace('/Auth' as any);
+      setUser(updatedUser);
+      await setStoredUser(updatedUser);
+      return true;
     } catch (error) {
-      console.error('Onboarding completion error:', error);
+      console.error('Update user error:', error);
+      return false;
     }
   };
 
-  return (
-    <AuthContext.Provider value={{
-      user,
-      isLoading,
-      isOnboarded,
-      login,
-      register,
-      logout,
-      completeOnboarding
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  const contextValue = useMemo(() => ({
+    user,
+    login,
+    logout,
+    updateUser,
+    isLoading,
+    setStoredUser,
+    getStoredUser,
+  }), [user, isLoading]);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+  return contextValue;
+});
