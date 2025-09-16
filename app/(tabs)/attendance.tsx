@@ -1,422 +1,640 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   Alert,
+  Animated,
   Modal,
   Platform,
 } from 'react-native';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
-import { SquareCheck as CheckSquare, QrCode, MapPin, Clock, Users, Calendar, CircleCheck as CheckCircle, Circle as XCircle, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useLocalization } from '@/contexts/LocalizationContext';
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  Users,
+  Calendar,
+  Hash,
+  MapPin,
+  User,
+  Plus,
+  Eye,
+  EyeOff,
+  Copy,
+  Share,
+  BarChart3,
+} from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 
 interface AttendanceRecord {
   id: string;
-  student_id: string;
-  activity_id: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  className: string;
+  date: string;
+  time: string;
   status: 'present' | 'absent' | 'late';
-  check_in_time: string | null;
-  location: string | null;
-  created_at: string;
-  activity_title?: string;
-  student_name?: string;
+  location?: string;
 }
 
-interface Activity {
+interface AttendancePin {
   id: string;
-  title: string;
-  due_date: string;
+  pin: string;
+  classId: string;
+  className: string;
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+  isActive: boolean;
+  attendanceCount: number;
 }
 
-interface Profile {
-  full_name: string;
-}
+const mockAttendanceRecords: AttendanceRecord[] = [
+  {
+    id: '1',
+    studentId: '1',
+    studentName: 'John Smith',
+    classId: '1',
+    className: 'Advanced Mathematics',
+    date: '2024-01-15',
+    time: '09:15',
+    status: 'present',
+    location: 'Room 101',
+  },
+  {
+    id: '2',
+    studentId: '1',
+    studentName: 'John Smith',
+    classId: '2',
+    className: 'Data Structures',
+    date: '2024-01-15',
+    time: '11:05',
+    status: 'late',
+    location: 'Lab 205',
+  },
+  {
+    id: '3',
+    studentId: '1',
+    studentName: 'John Smith',
+    classId: '3',
+    className: 'Physics',
+    date: '2024-01-14',
+    time: '14:00',
+    status: 'present',
+    location: 'Room 301',
+  },
+];
 
-interface AttendanceWithRelations {
-  id: string;
-  student_id: string;
-  activity_id: string;
-  status: 'present' | 'absent' | 'late';
-  check_in_time: string | null;
-  location: string | null;
-  created_at: string;
-  activities?: Activity;
-  profiles?: Profile;
-}
+const mockAttendancePins: AttendancePin[] = [
+  {
+    id: '1',
+    pin: '8A9B2C4D5E6F7G8H1I2J3K4L5M6N7O8P9Q0R1S2T3U4V5W6X7Y8Z9A0B1C2D',
+    classId: '1',
+    className: 'Advanced Mathematics',
+    createdBy: 'Dr. Sarah Johnson',
+    createdAt: '2024-01-15T09:00:00Z',
+    expiresAt: '2024-01-15T10:30:00Z',
+    isActive: true,
+    attendanceCount: 28,
+  },
+  {
+    id: '2',
+    pin: '1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0U1V2W3X4Y5Z6A7B8C9D0E1F',
+    classId: '2',
+    className: 'Data Structures Lab',
+    createdBy: 'Prof. Michael Chen',
+    createdAt: '2024-01-15T11:00:00Z',
+    expiresAt: '2024-01-15T12:30:00Z',
+    isActive: false,
+    attendanceCount: 25,
+  },
+];
 
 export default function AttendanceScreen() {
   const { user } = useAuth();
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [showScanner, setShowScanner] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [scanned, setScanned] = useState(false);
-
-  const role = user?.user_metadata?.role || user?.app_metadata?.role;
+  const { theme, isDark } = useTheme();
+  const { t } = useLocalization();
+  const insets = useSafeAreaInsets();
+  
+  const [attendancePin, setAttendancePin] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [showCreatePinModal, setShowCreatePinModal] = useState(false);
+  const [selectedClass, setSelectedClass] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [generatedPin, setGeneratedPin] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
 
   useEffect(() => {
-    loadAttendanceData();
-  }, [user]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
-  const loadAttendanceData = async () => {
-    if (!user) return;
-
-    try {
-      if (role === 'student') {
-        // Load student's attendance records
-        const { data, error } = await supabase
-          .from('attendance')
-          .select(`
-            *,
-            activities (
-              title,
-              due_date
-            )
-          `)
-          .eq('student_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        const records = (data as AttendanceWithRelations[]).map(record => ({
-          ...record,
-          activity_title: record.activities?.title || 'Unknown Activity',
-        }));
-
-        setAttendanceRecords(records);
-      } else if (role === 'teacher') {
-        // Load attendance for teacher's activities
-        const { data: courses, error: coursesError } = await supabase
-          .from('courses')
-          .select('id')
-          .eq('teacher_id', user.id);
-
-        if (coursesError) throw coursesError;
-
-        const courseIds = courses?.map(c => c.id) || [];
-
-        const { data: activities, error: activitiesError } = await supabase
-          .from('activities')
-          .select('id')
-          .in('course_id', courseIds);
-
-        if (activitiesError) throw activitiesError;
-
-        const activityIds = activities?.map(a => a.id) || [];
-
-        const { data, error } = await supabase
-          .from('attendance')
-          .select(`
-            *,
-            activities (
-              title,
-              due_date
-            ),
-            profiles!attendance_student_id_fkey (
-              full_name
-            )
-          `)
-          .in('activity_id', activityIds)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-
-        const records = (data as AttendanceWithRelations[]).map(record => ({
-          ...record,
-          activity_title: record.activities?.title || 'Unknown Activity',
-          student_name: record.profiles?.full_name || 'Unknown Student',
-        }));
-
-        setAttendanceRecords(records);
-      } else if (role === 'admin') {
-        // Load all attendance records
-        const { data, error } = await supabase
-          .from('attendance')
-          .select(`
-            *,
-            activities (
-              title,
-              due_date
-            ),
-            profiles!attendance_student_id_fkey (
-              full_name
-            )
-          `)
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (error) throw error;
-
-        const records = (data as AttendanceWithRelations[]).map(record => ({
-          ...record,
-          activity_title: record.activities?.title || 'Unknown Activity',
-          student_name: record.profiles?.full_name || 'Unknown Student',
-        }));
-
-        setAttendanceRecords(records);
-      }
-    } catch (error) {
-      console.error('Error loading attendance:', error);
-      Alert.alert('Error', 'Failed to load attendance data');
+  const generateAttendancePin = () => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 64; i++) {
+      result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
+    return result;
   };
 
-  const requestPermissions = async () => {
-    // For now, we'll just set permission to false since we removed barcode scanner
-    // You can implement camera permissions if you want to use a different QR scanner
-    setHasPermission(false);
-    Alert.alert('Info', 'QR scanning functionality requires a barcode scanner package. Please install one or use manual check-in.');
-  };
-
-  const handleQRScan = ({ type, data }: { type: string; data: string }) => {
-    if (scanned) return;
-    
-    setScanned(true);
-    setShowScanner(false);
-    
-    // Parse QR code data (should contain activity ID)
-    try {
-      const activityId = data; // Assuming QR contains activity ID
-      markAttendanceByQR(activityId);
-    } catch (error) {
-      Alert.alert('Error', 'Invalid QR code');
+  const handleMarkAttendance = async () => {
+    if (!attendancePin.trim()) {
+      Alert.alert('Error', 'Please enter the attendance PIN');
+      return;
     }
-  };
 
-  const markAttendanceByQR = async (activityId: string) => {
-    if (!user) return;
+    if (attendancePin.length !== 64) {
+      Alert.alert('Error', 'Invalid PIN format. PIN must be 64 characters long.');
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
-      // Get location if permission granted
-      let location = null;
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      if (status === 'granted') {
-        const currentLocation = await Location.getCurrentPositionAsync({});
-        location = `${currentLocation.coords.latitude},${currentLocation.coords.longitude}`;
+      // Mock validation
+      const validPin = mockAttendancePins.find(p => p.pin === attendancePin && p.isActive);
+      
+      if (validPin) {
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        Alert.alert('Success', `Attendance marked for ${validPin.className}!`);
+        setAttendancePin('');
+        setShowPinModal(false);
+      } else {
+        if (Platform.OS !== 'web') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+        Alert.alert('Error', 'Invalid or expired PIN. Please check with your instructor.');
       }
-
-      const { error } = await supabase
-        .from('attendance')
-        .insert({
-          student_id: user.id,
-          activity_id: activityId,
-          status: 'present',
-          check_in_time: new Date().toISOString(),
-          location,
-        } as any);
-
-      if (error) throw error;
-
-      Alert.alert('Success', 'Attendance marked successfully!');
-      loadAttendanceData();
     } catch (error) {
-      console.error('Error marking attendance:', error);
-      Alert.alert('Error', 'Failed to mark attendance');
+      Alert.alert('Error', 'Failed to mark attendance. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleManualCheckIn = async () => {
-    Alert.alert(
-      'Manual Check-in',
-      'This feature requires activity selection. Would you like to continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Continue', onPress: () => {
-          // Navigate to activity selection or implement manual check-in
-          Alert.alert('Info', 'Manual check-in implementation needed');
-        }}
-      ]
-    );
+  const handleCreatePin = async () => {
+    if (!selectedClass) {
+      Alert.alert('Error', 'Please select a class');
+      return;
+    }
+
+    const newPin = generateAttendancePin();
+    setGeneratedPin(newPin);
+    
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    
+    Alert.alert('Success', 'Attendance PIN generated successfully!');
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'present':
-        return <CheckCircle size={16} color="#10B981" />;
-      case 'late':
-        return <AlertCircle size={16} color="#F59E0B" />;
-      case 'absent':
-        return <XCircle size={16} color="#EF4444" />;
-      default:
-        return <Clock size={16} color="#6B7280" />;
+  const copyToClipboard = async (text: string) => {
+    // In a real app, you would use Clipboard API
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+    Alert.alert('Copied', 'PIN copied to clipboard');
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'present':
-        return '#10B981';
+        return theme.colors.success;
       case 'late':
-        return '#F59E0B';
+        return theme.colors.warning;
       case 'absent':
-        return '#EF4444';
+        return theme.colors.error;
       default:
-        return '#6B7280';
+        return theme.colors.textSecondary;
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={['#10B981', '#059669']}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>Attendance</Text>
-        <Text style={styles.headerSubtitle}>
-          Track and manage attendance
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'present':
+        return <CheckCircle size={16} color={theme.colors.success} />;
+      case 'late':
+        return <Clock size={16} color={theme.colors.warning} />;
+      case 'absent':
+        return <XCircle size={16} color={theme.colors.error} />;
+      default:
+        return <Clock size={16} color={theme.colors.textSecondary} />;
+    }
+  };
+
+  const renderStudentView = () => (
+    <>
+      {/* Quick Actions */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+          onPress={() => setShowPinModal(true)}
+        >
+          <Hash size={20} color="#FFFFFF" />
+          <Text style={styles.actionButtonText}>{t.markAttendance}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Attendance History */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          {t.attendanceHistory}
         </Text>
-      </LinearGradient>
-
-      {role === 'student' && (
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              requestPermissions();
-              setShowScanner(true);
-              setScanned(false);
-            }}
+        
+        {mockAttendanceRecords.map((record) => (
+          <Animated.View
+            key={record.id}
+            style={[
+              styles.recordCard,
+              {
+                backgroundColor: theme.colors.background,
+                borderColor: theme.colors.border,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              }
+            ]}
           >
-            <QrCode size={20} color="#FFFFFF" />
-            <Text style={styles.actionButtonText}>Scan QR Code</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.secondaryButton]}
-            onPress={handleManualCheckIn}
-          >
-            <MapPin size={20} color="#10B981" />
-            <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
-              Manual Check-in
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <ScrollView style={styles.content}>
-        <View style={styles.recordsList}>
-          {attendanceRecords.length > 0 ? (
-            attendanceRecords.map((record) => (
-              <View key={record.id} style={styles.recordCard}>
-                <View style={styles.recordHeader}>
-                  <View style={styles.recordTitleSection}>
-                    {getStatusIcon(record.status)}
-                    <Text style={styles.recordTitle}>
-                      {record.activity_title}
-                    </Text>
-                  </View>
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: getStatusColor(record.status) + '20' }
-                  ]}>
-                    <Text style={[
-                      styles.statusText,
-                      { color: getStatusColor(record.status) }
-                    ]}>
-                      {record.status}
-                    </Text>
-                  </View>
+            <View style={styles.recordHeader}>
+              <View style={styles.recordInfo}>
+                {getStatusIcon(record.status)}
+                <Text style={[styles.recordTitle, { color: theme.colors.text }]}>
+                  {record.className}
+                </Text>
+              </View>
+              <View style={[
+                styles.statusBadge,
+                { backgroundColor: getStatusColor(record.status) + '20' }
+              ]}>
+                <Text style={[
+                  styles.statusText,
+                  { color: getStatusColor(record.status) }
+                ]}>
+                  {record.status.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.recordDetails}>
+              <View style={styles.recordDetail}>
+                <Calendar size={14} color={theme.colors.textSecondary} />
+                <Text style={[styles.recordDetailText, { color: theme.colors.textSecondary }]}>
+                  {new Date(record.date).toLocaleDateString()}
+                </Text>
+              </View>
+              
+              <View style={styles.recordDetail}>
+                <Clock size={14} color={theme.colors.textSecondary} />
+                <Text style={[styles.recordDetailText, { color: theme.colors.textSecondary }]}>
+                  {record.time}
+                </Text>
+              </View>
+              
+              {record.location && (
+                <View style={styles.recordDetail}>
+                  <MapPin size={14} color={theme.colors.textSecondary} />
+                  <Text style={[styles.recordDetailText, { color: theme.colors.textSecondary }]}>
+                    {record.location}
+                  </Text>
                 </View>
+              )}
+            </View>
+          </Animated.View>
+        ))}
+      </View>
+    </>
+  );
 
-                {role !== 'student' && record.student_name && (
-                  <View style={styles.recordInfo}>
-                    <Users size={14} color="#6B7280" />
-                    <Text style={styles.recordInfoText}>
-                      Student: {record.student_name}
-                    </Text>
-                  </View>
-                )}
+  const renderTeacherView = () => (
+    <>
+      {/* Quick Actions */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+          onPress={() => setShowCreatePinModal(true)}
+        >
+          <Plus size={20} color="#FFFFFF" />
+          <Text style={styles.actionButtonText}>Create PIN</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: theme.colors.secondary }]}
+        >
+          <BarChart3 size={20} color="#FFFFFF" />
+          <Text style={styles.actionButtonText}>View Reports</Text>
+        </TouchableOpacity>
+      </View>
 
-                {record.check_in_time && (
-                  <View style={styles.recordInfo}>
-                    <Clock size={14} color="#6B7280" />
-                    <Text style={styles.recordInfoText}>
-                      Check-in: {new Date(record.check_in_time).toLocaleString()}
-                    </Text>
-                  </View>
-                )}
-
-                {record.location && (
-                  <View style={styles.recordInfo}>
-                    <MapPin size={14} color="#6B7280" />
-                    <Text style={styles.recordInfoText}>
-                      Location: {record.location}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.recordInfo}>
-                  <Calendar size={14} color="#6B7280" />
-                  <Text style={styles.recordInfoText}>
-                    Recorded: {new Date(record.created_at).toLocaleDateString()}
+      {/* Active PINs */}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          Active Attendance PINs
+        </Text>
+        
+        {mockAttendancePins.map((pin) => (
+          <Animated.View
+            key={pin.id}
+            style={[
+              styles.pinCard,
+              {
+                backgroundColor: theme.colors.background,
+                borderColor: pin.isActive ? theme.colors.success : theme.colors.border,
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              }
+            ]}
+          >
+            <View style={styles.pinHeader}>
+              <View style={styles.pinInfo}>
+                <Text style={[styles.pinClassName, { color: theme.colors.text }]}>
+                  {pin.className}
+                </Text>
+                <View style={[
+                  styles.pinStatusBadge,
+                  { 
+                    backgroundColor: pin.isActive 
+                      ? theme.colors.success + '20' 
+                      : theme.colors.textSecondary + '20' 
+                  }
+                ]}>
+                  <Text style={[
+                    styles.pinStatusText,
+                    { 
+                      color: pin.isActive 
+                        ? theme.colors.success 
+                        : theme.colors.textSecondary 
+                    }
+                  ]}>
+                    {pin.isActive ? 'ACTIVE' : 'EXPIRED'}
                   </Text>
                 </View>
               </View>
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <CheckSquare size={48} color="#9CA3AF" />
-              <Text style={styles.emptyTitle}>No attendance records</Text>
-              <Text style={styles.emptyText}>
-                {role === 'student' 
-                  ? 'Start checking in to activities to see your attendance history'
-                  : 'Attendance records will appear here once students start checking in'
-                }
-              </Text>
             </View>
-          )}
-        </View>
-      </ScrollView>
-
-      <Modal
-        visible={showScanner}
-        animationType="slide"
-        presentationStyle="fullScreen"
-      >
-        <View style={styles.scannerContainer}>
-          {hasPermission === null ? (
-            <Text>Requesting camera permission...</Text>
-          ) : hasPermission === false ? (
-            <View style={styles.permissionDenied}>
-              <Text style={styles.permissionText}>
-                Camera permission is required to scan QR codes
-              </Text>
+            
+            <View style={styles.pinDetails}>
+              <View style={styles.pinDetail}>
+                <Users size={14} color={theme.colors.textSecondary} />
+                <Text style={[styles.pinDetailText, { color: theme.colors.textSecondary }]}>
+                  {pin.attendanceCount} students marked
+                </Text>
+              </View>
+              
+              <View style={styles.pinDetail}>
+                <Clock size={14} color={theme.colors.textSecondary} />
+                <Text style={[styles.pinDetailText, { color: theme.colors.textSecondary }]}>
+                  Expires: {new Date(pin.expiresAt).toLocaleTimeString()}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.pinActions}>
               <TouchableOpacity
-                style={styles.permissionButton}
-                onPress={requestPermissions}
+                style={[styles.pinActionButton, { backgroundColor: theme.colors.info + '20' }]}
+                onPress={() => copyToClipboard(pin.pin)}
               >
-                <Text style={styles.permissionButtonText}>Grant Permission</Text>
+                <Copy size={16} color={theme.colors.info} />
+                <Text style={[styles.pinActionText, { color: theme.colors.info }]}>
+                  Copy PIN
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.pinActionButton, { backgroundColor: theme.colors.secondary + '20' }]}
+              >
+                <Share size={16} color={theme.colors.secondary} />
+                <Text style={[styles.pinActionText, { color: theme.colors.secondary }]}>
+                  Share
+                </Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <View style={styles.cameraPlaceholder}>
-              <Text style={styles.cameraPlaceholderText}>
-                Camera view would appear here
-              </Text>
-              <Text style={styles.cameraPlaceholderSubtext}>
-                Install a barcode scanner package to enable QR scanning
+          </Animated.View>
+        ))}
+      </View>
+    </>
+  );
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.surface }]}>
+      <LinearGradient
+        colors={isDark ? ['#1F2937', '#111827'] : ['#10B981', '#059669']}
+        style={[styles.header, { paddingTop: insets.top + 20 }]}
+      >
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <CheckCircle size={24} color="#FFFFFF" />
+            <View style={styles.headerText}>
+              <Text style={styles.headerTitle}>{t.attendance}</Text>
+              <Text style={styles.headerSubtitle}>
+                {user?.role === 'student' ? 'Mark your attendance' : 'Manage class attendance'}
               </Text>
             </View>
-          )}
-          
-          <View style={styles.scannerOverlay}>
-            <TouchableOpacity
-              style={styles.closeScanner}
-              onPress={() => setShowScanner(false)}
-            >
-              <Text style={styles.closeScannerText}>Close</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {user?.role === 'student' ? renderStudentView() : renderTeacherView()}
+      </ScrollView>
+
+      {/* PIN Input Modal */}
+      <Modal
+        visible={showPinModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPinModal(false)}
+      >
+        <View style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowPinModal(false)}>
+              <Text style={[styles.modalCancelButton, { color: theme.colors.textSecondary }]}>
+                Cancel
+              </Text>
             </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              Mark Attendance
+            </Text>
+            <TouchableOpacity 
+              onPress={handleMarkAttendance}
+              disabled={isSubmitting}
+            >
+              <Text style={[
+                styles.modalSubmitButton, 
+                { 
+                  color: attendancePin.trim() ? theme.colors.primary : theme.colors.textSecondary,
+                  opacity: isSubmitting ? 0.5 : 1,
+                }
+              ]}>
+                {isSubmitting ? 'Submitting...' : 'Submit'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
+              Enter the 64-character PIN provided by your instructor to mark your attendance.
+            </Text>
             
-            <View style={styles.scannerInstructions}>
-              <Text style={styles.scannerText}>
-                QR scanning requires additional setup
+            <View style={styles.pinInputContainer}>
+              <TextInput
+                style={[
+                  styles.pinInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                    color: theme.colors.text,
+                  }
+                ]}
+                placeholder="Enter 64-character attendance PIN"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={attendancePin}
+                onChangeText={setAttendancePin}
+                multiline
+                maxLength={64}
+                autoCapitalize="characters"
+              />
+              <Text style={[styles.pinCounter, { color: theme.colors.textSecondary }]}>
+                {attendancePin.length}/64
               </Text>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create PIN Modal */}
+      <Modal
+        visible={showCreatePinModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowCreatePinModal(false)}
+      >
+        <View style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowCreatePinModal(false)}>
+              <Text style={[styles.modalCancelButton, { color: theme.colors.textSecondary }]}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              Create Attendance PIN
+            </Text>
+            <TouchableOpacity onPress={handleCreatePin}>
+              <Text style={[styles.modalSubmitButton, { color: theme.colors.primary }]}>
+                Generate
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalDescription, { color: theme.colors.textSecondary }]}>
+              Generate a secure 64-character PIN for students to mark their attendance.
+            </Text>
+            
+            <View style={styles.classSelector}>
+              <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+                Select Class
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.classSelectButton,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.border,
+                  }
+                ]}
+                onPress={() => {
+                  // In a real app, this would open a class selection modal
+                  setSelectedClass('Advanced Mathematics');
+                }}
+              >
+                <Text style={[
+                  styles.classSelectText,
+                  { color: selectedClass ? theme.colors.text : theme.colors.textSecondary }
+                ]}>
+                  {selectedClass || 'Choose a class...'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {generatedPin && (
+              <View style={styles.generatedPinContainer}>
+                <Text style={[styles.inputLabel, { color: theme.colors.text }]}>
+                  Generated PIN
+                </Text>
+                <View style={styles.pinDisplayContainer}>
+                  <TextInput
+                    style={[
+                      styles.pinDisplay,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        borderColor: theme.colors.border,
+                        color: theme.colors.text,
+                      }
+                    ]}
+                    value={showPin ? generatedPin : '•'.repeat(64)}
+                    editable={false}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={styles.pinToggleButton}
+                    onPress={() => setShowPin(!showPin)}
+                  >
+                    {showPin ? (
+                      <EyeOff size={20} color={theme.colors.textSecondary} />
+                    ) : (
+                      <Eye size={20} color={theme.colors.textSecondary} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.pinActions}>
+                  <TouchableOpacity
+                    style={[styles.pinActionButton, { backgroundColor: theme.colors.info + '20' }]}
+                    onPress={() => copyToClipboard(generatedPin)}
+                  >
+                    <Copy size={16} color={theme.colors.info} />
+                    <Text style={[styles.pinActionText, { color: theme.colors.info }]}>
+                      Copy PIN
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.pinActionButton, { backgroundColor: theme.colors.secondary + '20' }]}
+                  >
+                    <Share size={16} color={theme.colors.secondary} />
+                    <Text style={[styles.pinActionText, { color: theme.colors.secondary }]}>
+                      Share PIN
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -427,67 +645,72 @@ export default function AttendanceScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
   },
   header: {
-    paddingTop: 60,
-    paddingBottom: 24,
     paddingHorizontal: 24,
+    paddingBottom: 24,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerText: {
+    marginLeft: 12,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#D1FAE5',
-    marginTop: 4,
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
   },
   quickActions: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
     gap: 12,
+    marginVertical: 20,
   },
   actionButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10B981',
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderRadius: 12,
-  },
-  secondaryButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#10B981',
+    gap: 8,
   },
   actionButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
   },
-  secondaryButtonText: {
-    color: '#10B981',
+  section: {
+    marginBottom: 24,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-  },
-  recordsList: {
-    paddingBottom: 24,
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
   },
   recordCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
+    borderWidth: 1,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -497,7 +720,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  recordTitleSection: {
+  recordInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
@@ -505,7 +728,6 @@ const styles = StyleSheet.create({
   recordTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
     marginLeft: 8,
   },
   statusBadge: {
@@ -515,119 +737,172 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontWeight: 'bold',
   },
-  recordInfo: {
+  recordDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  recordDetail: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    gap: 4,
   },
-  recordInfoText: {
+  recordDetailText: {
     fontSize: 12,
-    color: '#6B7280',
-    marginLeft: 6,
   },
-  emptyState: {
+  pinCard: {
+    borderRadius: 12,
+    borderWidth: 2,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pinHeader: {
+    marginBottom: 12,
+  },
+  pinInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 80,
   },
-  emptyTitle: {
-    fontSize: 20,
+  pinClassName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  pinStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  pinStatusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  pinDetails: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    marginBottom: 12,
+  },
+  pinDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  pinDetailText: {
+    fontSize: 12,
+  },
+  pinActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  pinActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  pinActionText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 16,
   },
-  emptyText: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-    paddingHorizontal: 32,
-  },
-  scannerContainer: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  scannerOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
-  },
-  closeScanner: {
-    position: 'absolute',
-    top: 60,
-    right: 24,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  closeScannerText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  scannerInstructions: {
-    position: 'absolute',
-    bottom: 100,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  scannerText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    textAlign: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  permissionDenied: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingTop: 60,
     paddingHorizontal: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
   },
-  permissionText: {
+  modalCancelButton: {
+    fontSize: 16,
+  },
+  modalTitle: {
     fontSize: 18,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 24,
+    fontWeight: '600',
   },
-  permissionButton: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  permissionButtonText: {
-    color: '#FFFFFF',
+  modalSubmitButton: {
     fontSize: 16,
     fontWeight: '600',
   },
-  cameraPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  modalContent: {
     padding: 24,
   },
-  cameraPlaceholderText: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    textAlign: 'center',
+  modalDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  pinInputContainer: {
+    marginBottom: 24,
+  },
+  pinInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 14,
+    fontFamily: 'monospace',
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  pinCounter: {
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: 4,
+  },
+  classSelector: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: '600',
     marginBottom: 8,
   },
-  cameraPlaceholderSubtext: {
-    fontSize: 14,
-    color: '#CCCCCC',
-    textAlign: 'center',
+  classSelectButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  classSelectText: {
+    fontSize: 16,
+  },
+  generatedPinContainer: {
+    marginTop: 24,
+  },
+  pinDisplayContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  pinDisplay: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingRight: 48,
+    fontSize: 12,
+    fontFamily: 'monospace',
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  pinToggleButton: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 4,
   },
 });
