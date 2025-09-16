@@ -24,14 +24,18 @@ import {
   GraduationCap 
 } from 'lucide-react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'expo-router'; // ✅ navigation
 
 type AuthMode = 'login' | 'register';
-type UserRole = 'student' | 'teacher' | 'dean';
+type UserRole = 'student' | 'teacher' | 'admin';
+
+interface RoleOption {
+  id: UserRole;
+  label: string;
+  icon: any;
+}
 
 export default function AuthScreen() {
   const { login, register, isLoading } = useAuth();
-  const router = useRouter(); // ✅
   const [mode, setMode] = useState<AuthMode>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -67,14 +71,16 @@ export default function AuthScreen() {
     }
 
     try {
+      let success = false;
+      
       if (mode === 'login') {
-        await login(formData.email, formData.password);
+        success = await login(formData.email, formData.password);
       } else {
         if (!formData.name || !formData.institution) {
           Alert.alert('Error', 'Please fill in all fields');
           return;
         }
-        await register({
+        success = await register({
           email: formData.email,
           password: formData.password,
           name: formData.name,
@@ -83,8 +89,12 @@ export default function AuthScreen() {
         });
       }
 
-      // ✅ After successful auth, go to tabs
-      router.replace('/(tabs)');
+      if (success) {
+        // Navigation will be handled automatically by the layout
+        console.log('Authentication successful');
+      } else {
+        Alert.alert('Error', mode === 'login' ? 'Invalid credentials' : 'Registration failed');
+      }
 
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Authentication failed');
@@ -102,10 +112,10 @@ export default function AuthScreen() {
     });
   };
 
-  const roles = [
+  const roles: RoleOption[] = [
     { id: 'student', label: 'Student', icon: GraduationCap },
     { id: 'teacher', label: 'Teacher', icon: User },
-    { id: 'dean', label: 'Dean', icon: Building },
+    { id: 'admin', label: 'Admin', icon: Building },
   ];
 
   return (
