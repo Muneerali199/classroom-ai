@@ -1,36 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function IndexScreen() {
   const { user, isLoading } = useAuth();
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [checkedOnboarding, setCheckedOnboarding] = useState(false);
 
   useEffect(() => {
-    if (isLoading) return;
+    const checkOnboarding = async () => {
+      if (isLoading) return;
 
-    // Check if user has seen onboarding before
-    const hasSeenOnboarding = false;
-    
-    if (!user && !hasSeenOnboarding) {
-      setShowOnboarding(true);
-      router.replace('/Onboarding' as any);
-    } else if (user) {
-      router.replace('/(tabs)' as any);
-    } else {
-      router.replace('/Auth' as any);
-    }
+      const seen = await AsyncStorage.getItem('hasSeenOnboarding');
+
+      if (!user && !seen) {
+        // First time -> show onboarding
+        await AsyncStorage.setItem('hasSeenOnboarding', 'true');
+        router.replace('/Onboarding');
+      } else if (user) {
+        // User already logged in
+        router.replace('/(tabs)');
+      } else {
+        // No user but onboarding done
+        router.replace('/Auth');
+      }
+
+      setCheckedOnboarding(true);
+    };
+
+    checkOnboarding();
   }, [user, isLoading]);
 
-  if (isLoading) {
+  if (isLoading || !checkedOnboarding) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#2563EB' }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#2563EB',
+        }}
+      >
         <ActivityIndicator size="large" color="#fff" />
       </View>
     );
   }
 
-  // Return empty view while routing happens
   return <View style={{ flex: 1, backgroundColor: '#2563EB' }} />;
 }
