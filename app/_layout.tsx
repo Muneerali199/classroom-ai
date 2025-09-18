@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LocalizationProvider } from "@/contexts/LocalizationContext";
+import { TimetableProvider } from "@/contexts/TimetableContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -24,7 +25,7 @@ function RootLayoutNav() {
     const inTabs = segments[0] === "(tabs)";
     const inAuth = segments[0] === "Auth";
     const inOnboarding = segments[0] === "Onboarding";
-    const inIndex = segments[0] === "index";
+    const inRootIndex = segments.length === 1 && segments[0] === undefined;
 
     console.log("Navigation state:", { 
       user, 
@@ -44,14 +45,14 @@ function RootLayoutNav() {
       // User is logged in and has completed onboarding
       else if (user.hasCompletedOnboarding) {
         // Only redirect to tabs if we're not already there and we're in auth/onboarding/index
-        if ((inAuth || inOnboarding || inIndex) && !inTabs) {
+        if ((inAuth || inOnboarding || inRootIndex) && !inTabs) {
           console.log("Redirecting to Tabs (user completed onboarding)");
           router.replace("/(tabs)");
         }
       }
     } else {
       // No user logged in, should be in auth
-      if (!inAuth && !inOnboarding && !inIndex) {
+      if (!inAuth && !inOnboarding && !inRootIndex) {
         console.log("Redirecting to Auth (no user logged in)");
         router.replace("/Auth");
       }
@@ -104,7 +105,9 @@ export default function RootLayout() {
         <ThemeProvider>
           <LocalizationProvider>
             <AuthProvider>
-              <RootLayoutNav />
+              <TimetableProvider>
+                <RootLayoutNav />
+              </TimetableProvider>
             </AuthProvider>
           </LocalizationProvider>
         </ThemeProvider>
