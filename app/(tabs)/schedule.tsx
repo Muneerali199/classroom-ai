@@ -51,7 +51,7 @@ const mockSchedule: DaySchedule[] = [
         location: 'Room 101',
         type: 'lecture',
         instructor: 'Dr. Smith',
-        color: ['#3B82F6', '#1D4ED8'],
+        color: ['#3B82F6', '#1D4ED8'] as const,
       },
       {
         id: '2',
@@ -61,7 +61,7 @@ const mockSchedule: DaySchedule[] = [
         location: 'Lab 205',
         type: 'lab',
         instructor: 'Prof. Johnson',
-        color: ['#10B981', '#059669'],
+        color: ['#10B981', '#059669'] as const,
       },
       {
         id: '3',
@@ -71,7 +71,7 @@ const mockSchedule: DaySchedule[] = [
         location: 'Room 301',
         type: 'tutorial',
         instructor: 'Dr. Brown',
-        color: ['#8B5CF6', '#7C3AED'],
+        color: ['#8B5CF6', '#7C3AED'] as const,
       },
     ],
   },
@@ -87,7 +87,7 @@ const mockSchedule: DaySchedule[] = [
         location: 'Room 102',
         type: 'lecture',
         instructor: 'Dr. Wilson',
-        color: ['#F59E0B', '#D97706'],
+        color: ['#F59E0B', '#D97706'] as const,
       },
       {
         id: '5',
@@ -97,7 +97,7 @@ const mockSchedule: DaySchedule[] = [
         location: 'Lab 301',
         type: 'lab',
         instructor: 'Prof. Davis',
-        color: ['#EF4444', '#DC2626'],
+        color: ['#EF4444', '#DC2626'] as const,
       },
     ],
   },
@@ -113,7 +113,7 @@ const mockSchedule: DaySchedule[] = [
         location: 'Room 201',
         type: 'lecture',
         instructor: 'Dr. Taylor',
-        color: ['#06B6D4', '#0891B2'],
+        color: ['#06B6D4', '#0891B2'] as const,
       },
       {
         id: '7',
@@ -122,7 +122,7 @@ const mockSchedule: DaySchedule[] = [
         endTime: '16:00',
         location: 'Hall A',
         type: 'exam',
-        color: ['#EC4899', '#DB2777'],
+        color: ['#EC4899', '#DB2777'] as const,
       },
     ],
   },
@@ -339,7 +339,7 @@ export default function ScheduleScreen() {
                         </View>
 
                         <View style={[
-                          styles.typebadge,
+                          styles.typeBadge,
                           { backgroundColor: getTypeColor(item.type) + '20' },
                         ]}>
                           <Text style={[
