@@ -1,34 +1,72 @@
-import { 
-  useState, 
-  useEffect, 
-  useMemo, 
-  useCallback, 
-  createContext, 
-  useContext, 
-  ReactNode 
+/**
+ * AuthContext - Authentication and User Management
+ *
+ * Provides authentication state management, user profile handling, and session persistence
+ * for the Classroom AI application. Integrates with Supabase for backend authentication
+ * and AsyncStorage for local session persistence.
+ *
+ * Features:
+ * - User authentication (login/register/logout)
+ * - Role-based access control (student/teacher/admin)
+ * - Profile management and updates
+ * - Onboarding completion tracking
+ * - Session persistence across app restarts
+ * - Real-time auth state synchronization
+ */
+
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  createContext,
+  useContext,
+  ReactNode
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 
+/**
+ * User interface representing a user profile in the system
+ */
 export interface User {
+  /** Unique user identifier */
   id: string;
+  /** Full display name */
   name: string;
+  /** Email address */
   email: string;
+  /** User role for access control */
   role: 'student' | 'teacher' | 'admin';
+  /** Institution name */
   institution: string;
+  /** Optional profile avatar URL */
   avatar?: string;
+  /** Optional phone number */
   phone?: string;
+  /** Optional date of birth */
   dateOfBirth?: string;
+  /** Optional address */
   address?: string;
+  /** Optional emergency contact information */
   emergencyContact?: string;
+  /** Whether user has completed onboarding */
   hasCompletedOnboarding?: boolean;
+  /** Extended profile information */
   profile?: {
+    /** User role (redundant with main role field) */
     role: 'student' | 'teacher' | 'admin';
+    /** Department or faculty */
     department?: string;
+    /** Student ID number */
     studentId?: string;
+    /** Employee ID number */
     employeeId?: string;
+    /** Academic year */
     year?: string;
+    /** Current semester */
     semester?: string;
+    /** Academic specialization */
     specialization?: string;
   };
 }
