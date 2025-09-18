@@ -1,16 +1,17 @@
 import { Tabs } from "expo-router";
-import { 
-  Home, 
-  MessageCircle, 
-  Calendar, 
-  Award, 
-  Users, 
-  BarChart3,  
-  Settings, 
+import {
+  Home,
+  MessageCircle,
+  Calendar,
+  Award,
+  Users,
+  BarChart3,
+  Settings,
   User,
   BookOpen,
   ClipboardList,
   PieChart,
+  Zap,
 } from "lucide-react-native";
 import React from "react";
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,28 +24,32 @@ export default function TabLayout() {
   }
 
   const getTabsForRole = () => {
-    const commonTabs = [
-      {
-        name: "index",
-        title: "Dashboard",
-        icon: Home,
-      },
-      {
-        name: "chatbot",
-        title: "AI Assistant",
-        icon: MessageCircle,
-      },
-      {
-        name: "profile",
-        title: "Profile",
-        icon: User,
-      },
-    ];
+    // AI Assistant available for all roles
+    const aiAssistantTab = {
+      name: "chatbot",
+      title: "AI Assistant",
+      icon: MessageCircle,
+    };
+
+    const profileTab = {
+      name: "profile",
+      title: "Profile",
+      icon: User,
+    };
 
     switch (user?.role) {
       case 'student':
         return [
-          ...commonTabs.slice(0, 1), // Dashboard
+          {
+            name: "index",
+            title: "Dashboard",
+            icon: Home,
+          },
+          {
+            name: "courses",
+            title: "My Courses",
+            icon: BookOpen,
+          },
           {
             name: "grades",
             title: "Grades",
@@ -56,44 +61,54 @@ export default function TabLayout() {
             icon: Calendar,
           },
           {
-            name: "courses",
-            title: "Courses",
-            icon: BookOpen,
-          },
-          {
             name: "schedule",
             title: "Schedule",
             icon: Calendar,
           },
-          ...commonTabs.slice(1), // AI Assistant and Profile
+          aiAssistantTab,
+          profileTab,
         ];
       case 'teacher':
         return [
-          ...commonTabs.slice(0, 1), // Dashboard
           {
-            name: "classes",
-            title: "Classes",
-            icon: Users,
+            name: "index",
+            title: "Dashboard",
+            icon: Home,
           },
           {
-            name: "reports",
-            title: "Reports",
-            icon: ClipboardList,
+            name: "classes",
+            title: "My Classes",
+            icon: Users,
           },
           {
             name: "attendance",
             title: "Attendance",
             icon: Calendar,
           },
-          ...commonTabs.slice(1), // AI Assistant and Profile
+          {
+            name: "reports",
+            title: "Reports",
+            icon: ClipboardList,
+          },
+          aiAssistantTab,
+          profileTab,
         ];
       case 'admin':
         return [
-          ...commonTabs.slice(0, 1), // Dashboard
+          {
+            name: "index",
+            title: "Dashboard",
+            icon: Home,
+          },
           {
             name: "analytics",
             title: "Analytics",
             icon: PieChart,
+          },
+          {
+            name: "timetable-generator",
+            title: "Timetable AI",
+            icon: Zap,
           },
           {
             name: "management",
@@ -105,20 +120,16 @@ export default function TabLayout() {
             title: "Reports",
             icon: BarChart3,
           },
-          ...commonTabs.slice(1), // AI Assistant and Profile
+          aiAssistantTab,
+          profileTab,
         ];
       default:
+        // Fallback for users without specific roles or during development
         return [
-          ...commonTabs,
           {
-            name: "grades",
-            title: "Grades",
-            icon: Award,
-          },
-          {
-            name: "attendance",
-            title: "Attendance",
-            icon: Calendar,
+            name: "index",
+            title: "Dashboard",
+            icon: Home,
           },
           {
             name: "courses",
@@ -131,9 +142,14 @@ export default function TabLayout() {
             icon: Users,
           },
           {
-            name: "reports",
-            title: "Reports",
-            icon: ClipboardList,
+            name: "grades",
+            title: "Grades",
+            icon: Award,
+          },
+          {
+            name: "attendance",
+            title: "Attendance",
+            icon: Calendar,
           },
           {
             name: "analytics",
@@ -141,10 +157,17 @@ export default function TabLayout() {
             icon: PieChart,
           },
           {
+            name: "reports",
+            title: "Reports",
+            icon: ClipboardList,
+          },
+          {
             name: "management",
             title: "Management",
             icon: Settings,
           },
+          aiAssistantTab,
+          profileTab,
         ];
     }
   };
