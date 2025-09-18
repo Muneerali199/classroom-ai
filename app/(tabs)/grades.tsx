@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '@/contexts/AuthContext';
+
 import {
   Award,
   TrendingUp,
@@ -140,7 +140,6 @@ const mockCourseGrades: CourseGrade[] = [
 ];
 
 export default function GradesScreen() {
-  const { } = useAuth();
   const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState<'overview' | 'recent' | 'courses'>('overview');
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -214,10 +213,10 @@ export default function GradesScreen() {
   };
 
   const stats = [
-    { label: 'Current GPA', value: calculateGPA(), icon: Award, color: ['#8B5CF6', '#7C3AED'] },
-    { label: 'Total Credits', value: '14', icon: BookOpen, color: ['#3B82F6', '#1D4ED8'] },
-    { label: 'Avg Grade', value: '89.9%', icon: TrendingUp, color: ['#10B981', '#059669'] },
-    { label: 'Courses', value: '4', icon: Target, color: ['#F59E0B', '#D97706'] },
+    { label: 'Current GPA', value: calculateGPA(), icon: Award, color: ['#8B5CF6', '#7C3AED'] as const },
+    { label: 'Total Credits', value: '14', icon: BookOpen, color: ['#3B82F6', '#1D4ED8'] as const },
+    { label: 'Avg Grade', value: '89.9%', icon: TrendingUp, color: ['#10B981', '#059669'] as const },
+    { label: 'Courses', value: '4', icon: Target, color: ['#F59E0B', '#D97706'] as const },
   ];
 
   return (
