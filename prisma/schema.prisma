@@ -1,0 +1,563 @@
+// Prisma schema for Classroom AI Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                     String    @id @default(cuid())
+  email                  String    @unique
+  fullName               String?
+  role                   UserRole
+  avatar                 String?
+  phone                  String?
+  dateOfBirth            DateTime?
+  address                String?
+  emergencyContact       String?
+  institution            String?
+  department             String?
+  studentId              String?   @unique
+  employeeId             String?   @unique
+  year                   String?
+  semester               String?
+  specialization         String?
+  hasCompletedOnboarding Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // Relations
+  courses       Course[]
+  enrollments   Enrollment[]
+  grades        Grade[]
+  attendance    Attendance[]
+  notifications Notification[]
+  scheduleItems ScheduleItem[]
+  submissions   Submission[]
+
+  // Message relations
+  sentMessages     Message[] @relation("MessageSender")
+  receivedMessages Message[] @relation("MessageReceiver")
+
+  // Department relations
+  departmentHead  Department?  @relation("DepartmentHead")
+  departmentUsers Department[] @relation("DepartmentUsers")
+
+  // Timetable relations
+  timetableRequests  TimetableRequest[] @relation("TimetableRequester")
+  timetableApprovals TimetableRequest[] @relation("TimetableApprover")
+  workflowApprovals  ApprovalWorkflow[]
+
+  @@map("users")
+}
+
+model Course {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  code        String   @unique
+  credits     Int      @default(3)
+  department  String?
+  level       String? // undergraduate, graduate, etc.
+  semester    String?
+  year        String?
+  teacherId   String
+  teacher     User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  enrollments   Enrollment[]
+  activities    Activity[]
+  grades        Grade[]
+  scheduleItems ScheduleItem[]
+  assignments   Assignment[]
+  messages      Message[]
+
+  @@map("courses")
+}
+
+model Enrollment {
+  id         String           @id @default(cuid())
+  studentId  String
+  courseId   String
+  enrolledAt DateTime         @default(now())
+  status     EnrollmentStatus @default(ACTIVE)
+
+  // Relations
+  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+  @@map("enrollments")
+}
+
+model Activity {
+  id          String         @id @default(cuid())
+  courseId    String
+  title       String
+  description String?
+  type        ActivityType
+  date        DateTime
+  startTime   String?
+  endTime     String?
+  location    String?
+  maxPoints   Float?
+  weight      Float          @default(1.0)
+  status      ActivityStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relations
+  course     Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  attendance Attendance[]
+  grades     Grade[]
+
+  @@map("activities")
+}
+
+model Attendance {
+  id           String           @id @default(cuid())
+  studentId    String
+  activityId   String
+  status       AttendanceStatus @default(PRESENT)
+  checkInTime  DateTime?
+  checkOutTime DateTime?
+  location     String?
+  deviceInfo   String?
+  ipAddress    String?
+  createdAt    DateTime         @default(now())
+
+  // Relations
+  student  User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, activityId])
+  @@map("attendance")
+}
+
+model Grade {
+  id           String    @id @default(cuid())
+  studentId    String
+  courseId     String?
+  activityId   String?
+  assignmentId String?
+  grade        String
+  points       Float
+  maxPoints    Float
+  percentage   Float
+  weight       Float     @default(1.0)
+  type         GradeType
+  semester     String?
+  year         String?
+  comments     String?
+  gradedBy     String
+  gradedAt     DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course     Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  activity   Activity?   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  assignment Assignment? @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@map("grades")
+}
+
+model Assignment {
+  id           String           @id @default(cuid())
+  courseId     String
+  title        String
+  description  String?
+  type         AssignmentType
+  dueDate      DateTime
+  maxPoints    Float
+  weight       Float            @default(1.0)
+  instructions String?
+  attachments  String // JSON string of file URLs
+  status       AssignmentStatus @default(ACTIVE)
+  createdBy    String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  // Relations
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+  grades      Grade[]
+
+  @@map("assignments")
+}
+
+model Submission {
+  id           String           @id @default(cuid())
+  assignmentId String
+  studentId    String
+  content      String?
+  attachments  String // JSON string of file URLs
+  submittedAt  DateTime         @default(now())
+  status       SubmissionStatus @default(SUBMITTED)
+  grade        Float?
+  feedback     String?
+  gradedBy     String?
+  gradedAt     DateTime?
+
+  // Relations
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, studentId])
+  @@map("submissions")
+}
+
+model ScheduleItem {
+  id          String         @id @default(cuid())
+  courseId    String?
+  title       String
+  description String?
+  type        ScheduleType
+  date        DateTime
+  startTime   String
+  endTime     String
+  location    String?
+  instructor  String?
+  color       String?
+  recurrence  String? // JSON string for recurrence rules
+  status      ScheduleStatus @default(ACTIVE)
+  createdBy   String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relations
+  course    Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  attendees User[]
+
+  @@map("schedule_items")
+}
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  priority  NotificationPriority @default(NORMAL)
+  read      Boolean              @default(false)
+  readAt    DateTime?
+  data      String? // JSON string for additional data
+  expiresAt DateTime?
+  createdAt DateTime             @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Message {
+  id          String      @id @default(cuid())
+  senderId    String
+  receiverId  String?
+  courseId    String?
+  content     String
+  type        MessageType @default(TEXT)
+  attachments String // JSON string of file URLs
+  read        Boolean     @default(false)
+  readAt      DateTime?
+  createdAt   DateTime    @default(now())
+
+  // Relations
+  sender   User    @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User?   @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Analytics {
+  id         String        @id @default(cuid())
+  type       AnalyticsType
+  entityId   String // ID of the entity being analyzed
+  entityType String // user, course, department, etc.
+  metric     String
+  value      Float
+  period     String // daily, weekly, monthly, etc.
+  date       DateTime
+  metadata   String? // JSON string for additional data
+  createdAt  DateTime      @default(now())
+
+  @@map("analytics")
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  headId      String?  @unique
+  head        User?    @relation("DepartmentHead", fields: [headId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users User[] @relation("DepartmentUsers")
+
+  @@map("departments")
+}
+
+// Enums
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+  ON_HOLD
+}
+
+enum ActivityType {
+  LECTURE
+  LAB
+  TUTORIAL
+  EXAM
+  QUIZ
+  ASSIGNMENT
+  PROJECT
+  WORKSHOP
+}
+
+enum ActivityStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum GradeType {
+  ASSIGNMENT
+  QUIZ
+  EXAM
+  PROJECT
+  PARTICIPATION
+  FINAL
+}
+
+enum AssignmentType {
+  HOMEWORK
+  PROJECT
+  ESSAY
+  PRESENTATION
+  LAB_REPORT
+  QUIZ
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  LATE
+  GRADED
+  RETURNED
+}
+
+enum ScheduleType {
+  CLASS
+  OFFICE_HOURS
+  EXAM
+  MEETING
+  EVENT
+  HOLIDAY
+}
+
+enum ScheduleStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  GRADE
+  ASSIGNMENT
+  ATTENDANCE
+  MESSAGE
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  ANNOUNCEMENT
+}
+
+enum AnalyticsType {
+  ATTENDANCE
+  GRADE
+  ENROLLMENT
+  PERFORMANCE
+  ENGAGEMENT
+  TIMETABLE_UTILIZATION
+  CONFLICT_DETECTION
+}
+
+model TimetableRequest {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  department  String?
+  semester    String
+  year        String
+  shift       ShiftType @default(MORNING)
+
+  // Parameters
+  classrooms                  Int
+  batches                     Int
+  subjects                    Int
+  faculty                     Int
+  maxClassesPerDay            Int   @default(6)
+  maxClassesPerSubjectPerWeek Int   @default(3)
+  maxClassesPerSubjectPerDay  Int   @default(1)
+  facultyLeaveDays            Float @default(2.0) // Average leaves per month
+
+  // Constraints
+  fixedSlots   String? // JSON array of fixed schedule slots
+  preferences  String? // JSON object of faculty/subject preferences
+  restrictions String? // JSON object of scheduling restrictions
+
+  status      TimetableRequestStatus @default(PENDING)
+  requestedBy String
+  requestedAt DateTime               @default(now())
+  approvedBy  String?
+  approvedAt  DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  // Relations
+  requester     User                    @relation("TimetableRequester", fields: [requestedBy], references: [id])
+  approver      User?                   @relation("TimetableApprover", fields: [approvedBy], references: [id])
+  optimizations TimetableOptimization[]
+  suggestions   TimetableSuggestion[]
+
+  @@map("timetable_requests")
+}
+
+model TimetableOptimization {
+  id          String  @id @default(cuid())
+  requestId   String
+  title       String
+  description String?
+
+  // Optimization metrics
+  classroomUtilization   Float
+  facultyWorkloadBalance Float
+  conflictCount          Int   @default(0)
+  totalSlots             Int
+
+  // Generated schedule
+  scheduleData String // JSON representation of the optimized timetable
+  score        Float // Optimization score (0-100)
+
+  status    TimetableOptimizationStatus @default(GENERATED)
+  selected  Boolean                     @default(false)
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+
+  // Relations
+  request  TimetableRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  workflow ApprovalWorkflow?
+
+  @@map("timetable_optimizations")
+}
+
+model TimetableSuggestion {
+  id          String               @id @default(cuid())
+  requestId   String
+  title       String
+  description String
+  suggestion  String // JSON object with suggested changes
+  reason      String // Why this suggestion is made
+  priority    NotificationPriority @default(NORMAL)
+  applied     Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+
+  // Relations
+  request TimetableRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@map("timetable_suggestions")
+}
+
+model ApprovalWorkflow {
+  id             String         @id @default(cuid())
+  optimizationId String         @unique
+  currentStep    String // Current approval step
+  steps          String // JSON array of approval steps
+  status         ApprovalStatus @default(PENDING)
+  comments       String?
+  approvedBy     String?
+  approvedAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  optimization TimetableOptimization @relation(fields: [optimizationId], references: [id], onDelete: Cascade)
+  approver     User?                 @relation(fields: [approvedBy], references: [id])
+
+  @@map("approval_workflows")
+}
+
+// Enums for Timetable
+enum ShiftType {
+  MORNING
+  EVENING
+  FULL_DAY
+}
+
+enum TimetableRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TimetableOptimizationStatus {
+  GENERATING
+  GENERATED
+  FAILED
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  IN_REVIEW
+}
