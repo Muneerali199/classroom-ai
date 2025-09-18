@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Animated,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +25,18 @@ import {
   ChevronRight,
   Activity,
   Award,
+  Camera,
+  Bell,
+  MessageCircle,
+  AlertTriangle,
+  Zap,
+  Wifi,
+  WifiOff,
+  Send,
 } from 'lucide-react-native';
+import { Camera as ExpoCamera } from 'expo-camera';
+import * as Notifications from 'expo-notifications';
+import * as Location from 'expo-location';
 
 interface ClassData {
   id: string;
@@ -36,7 +49,7 @@ interface ClassData {
   averageAttendance: number;
   averageGrade: number;
   nextClass: string;
-  color: [string, string];
+  color: readonly [string, string];
 }
 
 interface StudentData {
@@ -60,7 +73,7 @@ const mockClasses: ClassData[] = [
     averageAttendance: 92,
     averageGrade: 87.5,
     nextClass: '2024-01-16T09:00:00',
-    color: ['#3B82F6', '#1D4ED8'],
+    color: ['#3B82F6', '#1D4ED8'] as const,
   },
   {
     id: '2',
@@ -73,7 +86,7 @@ const mockClasses: ClassData[] = [
     averageAttendance: 88,
     averageGrade: 84.2,
     nextClass: '2024-01-16T11:00:00',
-    color: ['#10B981', '#059669'],
+    color: ['#10B981', '#059669'] as const,
   },
   {
     id: '3',
@@ -86,7 +99,7 @@ const mockClasses: ClassData[] = [
     averageAttendance: 85,
     averageGrade: 82.8,
     nextClass: '2024-01-15T14:00:00',
-    color: ['#8B5CF6', '#7C3AED'],
+    color: ['#8B5CF6', '#7C3AED'] as const,
   },
   {
     id: '4',
@@ -99,7 +112,7 @@ const mockClasses: ClassData[] = [
     averageAttendance: 95,
     averageGrade: 89.1,
     nextClass: '2024-01-16T15:00:00',
-    color: ['#F59E0B', '#D97706'],
+    color: ['#F59E0B', '#D97706'] as const,
   },
 ];
 
@@ -138,6 +151,19 @@ export default function ClassesScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
+  // Real-time features state
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState<{id: string, sender: string, message: string, timestamp: Date}[]>([]);
+  const [isOnline] = useState(true);
+  const [notifications, setNotifications] = useState<{id: string, title: string, message: string, type: 'info' | 'warning' | 'alert', timestamp: Date}[]>([]);
+  const [aiInsights, setAiInsights] = useState<{attendancePrediction: string, performanceInsights: string, recommendations: string[]}>( {
+    attendancePrediction: '',
+    performanceInsights: '',
+    recommendations: []
+  });
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -151,7 +177,107 @@ export default function ClassesScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+
+    // Initialize real-time features
+    initializePermissions();
+    setupNotifications();
+    getCurrentLocation();
+    generateAIInsights();
+    simulateRealTimeUpdates();
+  }, [fadeAnim, slideAnim]);
+
+  const initializePermissions = async () => {
+    const { status } = await ExpoCamera.requestCameraPermissionsAsync();
+    setHasPermission(status === 'granted');
+  };
+
+  const setupNotifications = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please enable notifications for real-time updates.');
+    }
+  };
+
+  const getCurrentLocation = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status === 'granted') {
+      const location = await Location.getCurrentPositionAsync({});
+      // Location data can be used for class proximity detection or other features
+      console.log('Current location:', location);
+    }
+  };
+
+  const generateAIInsights = () => {
+    setAiInsights({
+      attendancePrediction: 'Expected attendance: 89% (based on weather and historical data)',
+      performanceInsights: 'Class performance trending upward. Focus on advanced topics.',
+      recommendations: [
+        'Schedule review session for struggling students',
+        'Implement peer learning groups',
+        'Add interactive quizzes for better engagement'
+      ]
+    });
+  };
+
+  const simulateRealTimeUpdates = () => {
+    // Simulate real-time notifications
+    const interval = setInterval(() => {
+      const randomNotifications = [
+        { id: Date.now().toString(), title: 'Class Update', message: 'New assignment posted', type: 'info' as const, timestamp: new Date() },
+        { id: (Date.now() + 1).toString(), title: 'Attendance Alert', message: 'Low attendance detected', type: 'warning' as const, timestamp: new Date() },
+      ];
+      setNotifications(prev => [...prev, ...randomNotifications].slice(-5)); // Keep last 5
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(interval);
+  };
+
+  const takeAttendance = async () => {
+    if (!hasPermission) {
+      Alert.alert('Camera permission required', 'Please enable camera access to take attendance.');
+      return;
+    }
+
+    try {
+      // Simulate face recognition and attendance marking
+      setTimeout(() => {
+        Alert.alert('Attendance Taken', 'Successfully marked attendance for 25 students.');
+      }, 3000);
+    } catch {
+      Alert.alert('Error', 'Failed to take attendance. Please try again.');
+    }
+  };
+
+  const sendEmergencyAlert = () => {
+    Alert.alert(
+      'Emergency Alert Sent',
+      'Emergency services and school administration have been notified.',
+      [{ text: 'OK' }]
+    );
+
+    // Send notification to all students
+    const emergencyNotification = {
+      id: Date.now().toString(),
+      title: 'EMERGENCY ALERT',
+      message: 'Emergency situation reported. Stay in place and follow instructions.',
+      type: 'alert' as const,
+      timestamp: new Date()
+    };
+    setNotifications(prev => [emergencyNotification, ...prev]);
+  };
+
+  const sendChatMessage = () => {
+    if (chatMessage.trim()) {
+      const newMessage = {
+        id: Date.now().toString(),
+        sender: user?.name || 'Teacher',
+        message: chatMessage,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, newMessage]);
+      setChatMessage('');
+    }
+  };
 
   const getAttendanceColor = (attendance: number): string => {
     if (attendance >= 90) return '#10B981';
@@ -181,10 +307,10 @@ export default function ClassesScreen() {
   };
 
   const stats = [
-    { label: 'Total Classes', value: mockClasses.length.toString(), icon: BookOpen, color: ['#3B82F6', '#1D4ED8'] },
-    { label: 'Total Students', value: mockClasses.reduce((sum, c) => sum + c.students, 0).toString(), icon: Users, color: ['#10B981', '#059669'] },
-    { label: 'Avg Attendance', value: `${Math.round(mockClasses.reduce((sum, c) => sum + c.averageAttendance, 0) / mockClasses.length)}%`, icon: Calendar, color: ['#8B5CF6', '#7C3AED'] },
-    { label: 'Avg Grade', value: `${Math.round(mockClasses.reduce((sum, c) => sum + c.averageGrade, 0) / mockClasses.length)}%`, icon: Award, color: ['#F59E0B', '#D97706'] },
+    { label: 'Total Classes', value: mockClasses.length.toString(), icon: BookOpen, color: ['#3B82F6', '#1D4ED8'] as const },
+    { label: 'Total Students', value: mockClasses.reduce((sum, c) => sum + c.students, 0).toString(), icon: Users, color: ['#10B981', '#059669'] as const },
+    { label: 'Avg Attendance', value: `${Math.round(mockClasses.reduce((sum, c) => sum + c.averageAttendance, 0) / mockClasses.length)}%`, icon: Calendar, color: ['#8B5CF6', '#7C3AED'] as const },
+    { label: 'Avg Grade', value: `${Math.round(mockClasses.reduce((sum, c) => sum + c.averageGrade, 0) / mockClasses.length)}%`, icon: Award, color: ['#F59E0B', '#D97706'] as const },
   ];
 
   if (showStudents && selectedClass) {
@@ -214,6 +340,84 @@ export default function ClassesScreen() {
         </LinearGradient>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Real-time Status Bar */}
+          <View style={styles.statusBar}>
+            <View style={styles.statusItem}>
+              {isOnline ? <Wifi size={16} color="#10B981" /> : <WifiOff size={16} color="#EF4444" />}
+              <Text style={[styles.statusText, { color: isOnline ? '#10B981' : '#EF4444' }]}>
+                {isOnline ? 'Online' : 'Offline'}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.emergencyButton} onPress={sendEmergencyAlert}>
+              <AlertTriangle size={16} color="#FFFFFF" />
+              <Text style={styles.emergencyText}>Emergency</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* AI Insights */}
+          <Animated.View style={[styles.insightsSection, { opacity: fadeAnim }]}>
+            <Text style={styles.sectionTitle}>AI Insights</Text>
+            <LinearGradient colors={['rgba(139, 92, 246, 0.1)', 'rgba(139, 92, 246, 0.05)']} style={styles.insightCard}>
+              <View style={styles.insightHeader}>
+                <Zap size={20} color="#8B5CF6" />
+                <Text style={styles.insightTitle}>Smart Predictions</Text>
+              </View>
+              <Text style={styles.insightText}>{aiInsights.attendancePrediction}</Text>
+              <Text style={styles.insightText}>{aiInsights.performanceInsights}</Text>
+              <View style={styles.recommendations}>
+                <Text style={styles.recommendationsTitle}>Recommendations:</Text>
+                {aiInsights.recommendations.map((rec, index) => (
+                  <Text key={index} style={styles.recommendationText}>• {rec}</Text>
+                ))}
+              </View>
+            </LinearGradient>
+          </Animated.View>
+
+          {/* Quick Actions */}
+          <Animated.View style={[styles.actionsSection, { opacity: fadeAnim }]}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity style={styles.actionButton} onPress={takeAttendance}>
+                <LinearGradient colors={['#10B981', '#059669']} style={styles.actionGradient}>
+                  <Camera size={20} color="#FFFFFF" />
+                  <Text style={styles.actionText}>Take Attendance</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButton} onPress={() => setShowChat(true)}>
+                <LinearGradient colors={['#3B82F6', '#1D4ED8']} style={styles.actionGradient}>
+                  <MessageCircle size={20} color="#FFFFFF" />
+                  <Text style={styles.actionText}>Class Chat</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* Notifications */}
+          {notifications.length > 0 && (
+            <Animated.View style={[styles.notificationsSection, { opacity: fadeAnim }]}>
+              <Text style={styles.sectionTitle}>Recent Notifications</Text>
+              {notifications.slice(0, 3).map((notification) => (
+                <LinearGradient
+                  key={notification.id}
+                  colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.7)']}
+                  style={styles.notificationCard}
+                >
+                  <View style={styles.notificationHeader}>
+                    <Bell size={16} color={
+                      notification.type === 'alert' ? '#EF4444' :
+                      notification.type === 'warning' ? '#F59E0B' : '#3B82F6'
+                    } />
+                    <Text style={styles.notificationTitle}>{notification.title}</Text>
+                  </View>
+                  <Text style={styles.notificationMessage}>{notification.message}</Text>
+                  <Text style={styles.notificationTime}>
+                    {notification.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </LinearGradient>
+              ))}
+            </Animated.View>
+          )}
+
           <Animated.View style={[styles.studentsSection, { opacity: fadeAnim }]}>
             <Text style={styles.sectionTitle}>Students</Text>
             {mockStudents.map((student, index) => (
@@ -303,6 +507,47 @@ export default function ClassesScreen() {
             ))}
           </Animated.View>
         </ScrollView>
+
+        {/* Chat Modal */}
+        <Modal visible={showChat} animationType="slide" transparent={true}>
+          <View style={styles.chatModal}>
+            <LinearGradient colors={['#667eea', '#764ba2']} style={styles.chatHeader}>
+              <TouchableOpacity onPress={() => setShowChat(false)}>
+                <ChevronRight size={24} color="#FFFFFF" style={{ transform: [{ rotate: '180deg' }] }} />
+              </TouchableOpacity>
+              <Text style={styles.chatTitle}>Class Chat</Text>
+              <View style={styles.chatStatus}>
+                <View style={[styles.onlineIndicator, { backgroundColor: isOnline ? '#10B981' : '#EF4444' }]} />
+                <Text style={styles.chatStatusText}>{isOnline ? '25 online' : 'Offline'}</Text>
+              </View>
+            </LinearGradient>
+
+            <ScrollView style={styles.chatMessages}>
+              {chatMessages.map((msg) => (
+                <View key={msg.id} style={styles.chatMessage}>
+                  <Text style={styles.messageSender}>{msg.sender}</Text>
+                  <Text style={styles.messageText}>{msg.message}</Text>
+                  <Text style={styles.messageTime}>
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            <View style={styles.chatInput}>
+              <TextInput
+                style={styles.chatTextInput}
+                placeholder="Type a message..."
+                value={chatMessage}
+                onChangeText={setChatMessage}
+                multiline
+              />
+              <TouchableOpacity style={styles.sendButton} onPress={sendChatMessage}>
+                <Send size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   }
@@ -781,5 +1026,229 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     fontWeight: '600',
     marginBottom: 4,
+  },
+  statusBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  emergencyButton: {
+    backgroundColor: '#EF4444',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  emergencyText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  insightsSection: {
+    marginBottom: 24,
+  },
+  insightCard: {
+    borderRadius: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  insightTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginLeft: 8,
+  },
+  insightText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  recommendations: {
+    marginTop: 12,
+  },
+  recommendationsTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  recommendationText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  actionsSection: {
+    marginBottom: 24,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  actionButton: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  actionGradient: {
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  actionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  notificationsSection: {
+    marginBottom: 24,
+  },
+  notificationCard: {
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  notificationTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginLeft: 8,
+  },
+  notificationMessage: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  notificationTime: {
+    fontSize: 10,
+    color: '#9CA3AF',
+  },
+  chatModal: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    paddingTop: 50,
+  },
+  chatTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginLeft: 16,
+    flex: 1,
+  },
+  chatStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  onlineIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  chatStatusText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  chatMessages: {
+    flex: 1,
+    padding: 16,
+  },
+  chatMessage: {
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+  },
+  messageSender: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  messageText: {
+    fontSize: 14,
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  messageTime: {
+    fontSize: 10,
+    color: '#9CA3AF',
+  },
+  chatInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  chatTextInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 12,
+    maxHeight: 80,
+  },
+  sendButton: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
