@@ -26,6 +26,7 @@ import {
   Animated,
   Modal,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
@@ -44,6 +45,8 @@ import {
   Loader2,
   CheckCircle,
   Waves,
+  Send,
+  X,
 } from 'lucide-react-native';
 
 const styles = StyleSheet.create({
@@ -308,6 +311,21 @@ const styles = StyleSheet.create({
   spacer: {
     width: 44,
   },
+  sliderContainer: {
+    marginTop: 8,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderLabel: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sliderValue: {
+    fontSize: 12,
+  },
 
   // Error Styles
   errorBanner: {
@@ -338,6 +356,26 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontSize: 14,
+  },
+
+  // TTS Controls
+  ttsControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  ttsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  ttsButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 
@@ -381,6 +419,8 @@ interface SpeechState {
   currentText: string;
   rate: number;
   pitch: number;
+  volume: number;
+  language: string;
 }
 
 interface MicrophoneTestState {
@@ -418,6 +458,8 @@ export function VoiceInterface({
     currentText: '',
     rate: 0.9,
     pitch: 1.0,
+    volume: 0.8,
+    language: 'en-US',
   });
 
   const [microphoneTest, setMicrophoneTest] = useState<MicrophoneTestState>({
@@ -430,6 +472,7 @@ export function VoiceInterface({
   const [showSettings, setShowSettings] = useState(false);
   const [autoSend, setAutoSend] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showTtsControls, setShowTtsControls] = useState(false);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -480,6 +523,7 @@ export function VoiceInterface({
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      Speech.stop();
     };
   }, []);
 
@@ -553,7 +597,7 @@ export function VoiceInterface({
       
       const formData = new FormData();
       const uriParts = uri.split('.');
-      const fileType = uriParts[uriParts.length - 1] || 'wav';
+      const fileType = Platform.OS === 'web' ? 'webm' : (uriParts[uriParts.length - 1] || 'm4a');
       
       const mimeTypeMap: { [key: string]: string } = {
         'm4a': 'audio/m4a',
@@ -563,7 +607,7 @@ export function VoiceInterface({
         'mp4': 'audio/mp4',
       };
       
-      const mimeType = mimeTypeMap[fileType] || 'audio/wav';
+      const mimeType = mimeTypeMap[fileType] || 'audio/m4a';
       
       const audioFile = {
         uri,
@@ -811,7 +855,7 @@ export function VoiceInterface({
           staysActiveInBackground: false,
         });
 
-        // Optimized recording options
+        // Optimized recording options (using consistent .m4a for iOS and Android)
         const recordingOptions = {
           android: {
             extension: '.m4a',
@@ -822,15 +866,12 @@ export function VoiceInterface({
             bitRate: 128000,
           },
           ios: {
-            extension: '.wav',
-            outputFormat: Audio.IOSOutputFormat.LINEARPCM,
+            extension: '.m4a',
+            outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
             audioQuality: Audio.IOSAudioQuality.HIGH,
             sampleRate: 44100,
             numberOfChannels: 1,
             bitRate: 128000,
-            linearPCMBitDepth: 16,
-            linearPCMIsBigEndian: false,
-            linearPCMIsFloat: false,
           },
           web: {
             mimeType: 'audio/webm;codecs=opus',
@@ -933,8 +974,13 @@ export function VoiceInterface({
     }
   }, [recordingState.isRecording, recordingState.isPaused, isProcessing, triggerHaptic]);
 
-  // Text-to-speech function
-  const speakText = useCallback(async (text: string) => {
+  // Enhanced Text-to-speech function with customization
+  const speakText = useCallback(async (text: string, options?: {
+    rate?: number;
+    pitch?: number;
+    volume?: number;
+    language?: string;
+  }) => {
     try {
       if (speechState.isSpeaking) {
         Speech.stop();
@@ -942,24 +988,37 @@ export function VoiceInterface({
         return;
       }
 
+      if (!text || text.trim().length === 0) {
+        setError('No text to speak. Please provide some text.');
+        return;
+      }
+
+      const speakOptions = {
+        language: options?.language || speechState.language,
+        pitch: options?.pitch !== undefined ? options.pitch : speechState.pitch,
+        rate: options?.rate !== undefined ? options.rate : speechState.rate,
+        volume: options?.volume !== undefined ? options.volume : speechState.volume,
+      };
+
       setSpeechState(prev => ({
         ...prev,
         isSpeaking: true,
         currentText: text,
+        ...speakOptions,
       }));
 
       await Speech.speak(text, {
-        language: 'en-US',
-        pitch: speechState.pitch,
-        rate: speechState.rate,
-        volume: 0.8,
+        ...speakOptions,
         onStart: () => {
           setSpeechState(prev => ({ ...prev, isSpeaking: true }));
+          triggerHaptic('light');
         },
         onDone: () => {
           setSpeechState(prev => ({ ...prev, isSpeaking: false, currentText: '' }));
+          triggerHaptic('light');
         },
-        onError: () => {
+        onError: (error) => {
+          console.error('Speech error:', error);
           setSpeechState(prev => ({ ...prev, isSpeaking: false, currentText: '' }));
           setError('Text-to-speech failed. Please try again.');
         },
@@ -969,12 +1028,21 @@ export function VoiceInterface({
       setSpeechState(prev => ({ ...prev, isSpeaking: false, currentText: '' }));
       setError('Text-to-speech not available.');
     }
-  }, [speechState.isSpeaking, speechState.pitch, speechState.rate]);
+  }, [speechState.isSpeaking, speechState.pitch, speechState.rate, speechState.volume, speechState.language, triggerHaptic]);
 
   const stopSpeaking = useCallback(() => {
     Speech.stop();
     setSpeechState(prev => ({ ...prev, isSpeaking: false, currentText: '' }));
-  }, []);
+    triggerHaptic('light');
+  }, [triggerHaptic]);
+
+  // Speak the transcribed text
+  const speakTranscribedText = useCallback(() => {
+    const textToSpeak = transcriptionState.finalTranscript || transcriptionState.transcript;
+    if (textToSpeak) {
+      speakText(textToSpeak);
+    }
+  }, [transcriptionState.finalTranscript, transcriptionState.transcript, speakText]);
 
   const testMicrophone = async () => {
     if (microphoneTest.testing) {
@@ -1111,8 +1179,8 @@ export function VoiceInterface({
                 : theme.colors.surface,
             },
           ]}
-          onPress={speechState.isSpeaking ? stopSpeaking : undefined}
-          disabled={disabled || !speechState.isSpeaking}
+          onPress={speechState.isSpeaking ? stopSpeaking : speakTranscribedText}
+          disabled={disabled || (!speechState.isSpeaking && !transcriptionState.finalTranscript && !transcriptionState.transcript)}
           activeOpacity={0.7}
         >
           {speechState.isSpeaking ? (
@@ -1209,6 +1277,122 @@ export function VoiceInterface({
               {Math.round(transcriptionState.confidence * 100)}% confidence
             </Text>
           )}
+
+          {/* TTS Controls for transcribed text */}
+          {transcriptionState.finalTranscript && (
+            <View style={styles.ttsControls}>
+              <TouchableOpacity
+                style={[
+                  styles.ttsButton,
+                  {
+                    backgroundColor: theme.colors.primary,
+                  },
+                ]}
+                onPress={speakTranscribedText}
+                disabled={speechState.isSpeaking}
+              >
+                <Volume2 size={14} color="#FFFFFF" />
+                <Text style={[styles.ttsButtonText, { color: '#FFFFFF' }]}>
+                  Speak
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.ttsButton,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
+                onPress={() => setShowTtsControls(!showTtsControls)}
+              >
+                <Settings size={14} color={theme.colors.text} />
+                <Text style={[styles.ttsButtonText, { color: theme.colors.text }]}>
+                  Settings
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* TTS Customization Controls */}
+          {showTtsControls && transcriptionState.finalTranscript && (
+            <View style={{ marginTop: 12, gap: 8 }}>
+              <View style={styles.sliderContainer}>
+                <View style={styles.sliderLabel}>
+                  <Text style={{ color: theme.colors.text, fontSize: 12 }}>Speed: {speechState.rate.toFixed(1)}x</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[0.5, 0.75, 1.0, 1.25, 1.5].map((rate) => (
+                    <TouchableOpacity
+                      key={rate}
+                      style={[
+                        styles.rateButton,
+                        {
+                          backgroundColor: speechState.rate === rate ? theme.colors.primary : theme.colors.surface,
+                        },
+                      ]}
+                      onPress={() => setSpeechState(prev => ({ ...prev, rate }))}
+                    >
+                      <Text style={[
+                        styles.rateButtonText, 
+                        { color: speechState.rate === rate ? '#FFFFFF' : theme.colors.text }
+                      ]}>
+                        {rate}x
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.sliderContainer}>
+                <View style={styles.sliderLabel}>
+                  <Text style={{ color: theme.colors.text, fontSize: 12 }}>Pitch: {speechState.pitch.toFixed(1)}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[0.5, 0.75, 1.0, 1.25, 1.5].map((pitch) => (
+                    <TouchableOpacity
+                      key={pitch}
+                      style={[
+                        styles.rateButton,
+                        {
+                          backgroundColor: speechState.pitch === pitch ? theme.colors.primary : theme.colors.surface,
+                        },
+                      ]}
+                      onPress={() => setSpeechState(prev => ({ ...prev, pitch }))}
+                    >
+                      <Text style={[
+                        styles.rateButtonText, 
+                        { color: speechState.pitch === pitch ? '#FFFFFF' : theme.colors.text }
+                      ]}>
+                        {pitch}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.ttsButton,
+                  {
+                    backgroundColor: theme.colors.primary,
+                    alignSelf: 'flex-start',
+                  },
+                ]}
+                onPress={() => {
+                  speakTranscribedText();
+                  setShowTtsControls(false);
+                }}
+              >
+                <Send size={14} color="#FFFFFF" />
+                <Text style={[styles.ttsButtonText, { color: '#FFFFFF' }]}>
+                  Apply & Speak
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </Animated.View>
       )}
     </Animated.View>
@@ -1267,6 +1451,27 @@ export function VoiceInterface({
             <Text style={[styles.centerTranscriptText, { color: theme.colors.text }]}>
               &ldquo;{transcriptionState.finalTranscript || transcriptionState.transcript}&rdquo;
             </Text>
+            
+            {/* TTS Button for center mode */}
+            {transcriptionState.finalTranscript && (
+              <TouchableOpacity
+                style={[
+                  styles.ttsButton,
+                  {
+                    backgroundColor: theme.colors.primary,
+                    alignSelf: 'center',
+                    marginTop: 12,
+                  },
+                ]}
+                onPress={speakTranscribedText}
+                disabled={speechState.isSpeaking}
+              >
+                <Volume2 size={16} color="#FFFFFF" />
+                <Text style={[styles.ttsButtonText, { color: '#FFFFFF' }]}>
+                  {speechState.isSpeaking ? 'Stop' : 'Speak Text'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1314,7 +1519,7 @@ export function VoiceInterface({
           <View style={styles.spacer} />
         </View>
 
-        <View style={styles.modalContent}>
+        <ScrollView style={styles.modalContent}>
           {/* Auto-send Toggle */}
           <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
             <View style={styles.settingLeft}>
@@ -1344,11 +1549,26 @@ export function VoiceInterface({
             </TouchableOpacity>
           </View>
 
+          {/* TTS Settings */}
+          <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
+            <View style={styles.settingLeft}>
+              <Text style={[styles.settingTitle, { color: theme.colors.text }]}>Text-to-Speech</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
+                Customize speech output settings
+              </Text>
+            </View>
+          </View>
+
           {/* Speech Rate */}
           <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
-            <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
-              Speech Rate: {speechState.rate.toFixed(1)}x
-            </Text>
+            <View style={styles.settingLeft}>
+              <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
+                Speech Rate: {speechState.rate.toFixed(1)}x
+              </Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
+                Speed of speech output
+              </Text>
+            </View>
             <View style={styles.rateButtons}>
               <TouchableOpacity
                 style={[styles.rateButton, { backgroundColor: theme.colors.surface }]}
@@ -1369,6 +1589,106 @@ export function VoiceInterface({
                 <Text style={[styles.rateButtonText, { color: theme.colors.text }]}>+</Text>
               </TouchableOpacity>
             </View>
+          </View>
+
+          {/* Speech Pitch */}
+          <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
+            <View style={styles.settingLeft}>
+              <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
+                Speech Pitch: {speechState.pitch.toFixed(1)}
+              </Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
+                Pitch of speech output
+              </Text>
+            </View>
+            <View style={styles.rateButtons}>
+              <TouchableOpacity
+                style={[styles.rateButton, { backgroundColor: theme.colors.surface }]}
+                onPress={() => setSpeechState(prev => ({ 
+                  ...prev, 
+                  pitch: Math.max(0.5, prev.pitch - 0.1) 
+                }))}
+              >
+                <Text style={[styles.rateButtonText, { color: theme.colors.text }]}>-</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.rateButton, { backgroundColor: theme.colors.surface }]}
+                onPress={() => setSpeechState(prev => ({ 
+                  ...prev, 
+                  pitch: Math.min(2.0, prev.pitch + 0.1) 
+                }))}
+              >
+                <Text style={[styles.rateButtonText, { color: theme.colors.text }]}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Speech Volume */}
+          <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
+            <View style={styles.settingLeft}>
+              <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
+                Speech Volume: {Math.round(speechState.volume * 100)}%
+              </Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
+                Volume of speech output
+              </Text>
+            </View>
+            <View style={styles.rateButtons}>
+              <TouchableOpacity
+                style={[styles.rateButton, { backgroundColor: theme.colors.surface }]}
+                onPress={() => setSpeechState(prev => ({ 
+                  ...prev, 
+                  volume: Math.max(0.1, prev.volume - 0.1) 
+                }))}
+              >
+                <Text style={[styles.rateButtonText, { color: theme.colors.text }]}>-</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.rateButton, { backgroundColor: theme.colors.surface }]}
+                onPress={() => setSpeechState(prev => ({ 
+                  ...prev, 
+                  volume: Math.min(1.0, prev.volume + 0.1) 
+                }))}
+              >
+                <Text style={[styles.rateButtonText, { color: theme.colors.text }]}>+</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Test TTS */}
+          <View style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}>
+            <View style={styles.settingLeft}>
+              <Text style={[styles.settingTitle, { color: theme.colors.text }]}>Test TTS</Text>
+              <Text style={[styles.settingDescription, { color: theme.colors.textSecondary }]}>
+                Test current speech settings
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.testButton,
+                {
+                  backgroundColor: speechState.isSpeaking 
+                    ? theme.colors.error 
+                    : theme.colors.primary,
+                },
+              ]}
+              onPress={() => {
+                if (speechState.isSpeaking) {
+                  stopSpeaking();
+                } else {
+                  speakText('This is a test of the text to speech functionality with your current settings.');
+                }
+              }}
+            >
+              {speechState.isSpeaking ? (
+                <Square size={16} color="#FFFFFF" />
+              ) : (
+                <Volume2 size={16} color="#FFFFFF" />
+              )}
+              <Text style={styles.testButtonText}>
+                {speechState.isSpeaking ? 'Stop' : 'Test'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Microphone Test */}
@@ -1433,7 +1753,7 @@ export function VoiceInterface({
               </Text>
             </View>
           )}
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
